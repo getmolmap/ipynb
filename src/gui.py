@@ -18,10 +18,11 @@ from ipywidgets import (Box,
                         Text,
                         ToggleButtons,
                         VBox,)
-import ipywidgets as widgets
+# import ipywidgets as widgets
 from IPython import display
 from traitlets import HasTraits, link, Int, Float, Unicode, List, Bool
 from elements import ELEMENTS
+import getmolmap
 
 LAYOUT_HTML_1 = '<style> \
 .widget-area .getMolMap .panel-body{padding: 0;} \
@@ -31,27 +32,30 @@ LAYOUT_HTML_1 = '<style> \
 .widget-area .getMolMap .widget-text{width: 10em;} \
 </style>'
 
+
 class SimpleDataModel(HasTraits):
-    atomtype = Unicode('Si')
-    fold = Unicode('.')
+    atomtype = Unicode('Pt')
+    fold = Unicode('../demo_molecules')
     sub = Int(6)
     rad_type = Unicode('covrad')
     rad_scale = Float(1.17)
     radius = Float(0)
-    radii = List(trait=Float, default_value=[0.,], minlen=1)
+    radii = List(trait=Float, default_value=[0., ], minlen=1)
     excludeH = Bool(False)
     excludes = List(trait=Unicode)
     num_angles = Int(1)
+    output_folder = Unicode('../results')
+    output_name = Unicode('getmolmap_results')
 
-    def getvalues(self):
+    def get_values(self):
         values = dict([(k, getattr(self, k)) for k in self.trait_names()])
-        values['radii'] = set(values['radius'] + values['radii'])
+        values['radii'] = set([values['radius'], ] + values['radii'])
         #TODO: not elegant:
         dont = "Don't exclude any elements"
-        values['excludes'] = [e for e in values['excludes'] if dont != e ]
+        values['excludes'] = [e for e in values['excludes'] if dont != e]
         if values['excludeH']:
             values['excludes'] = list(set(values['excludes'] + ['H']))
-        
+        return values
 
 
 class PanelTitle(HTML):
@@ -102,7 +106,7 @@ class SimpleGui(Box):
         # Create a GUI
         # kwargs["orientation"] = 'vertical'
         kwargs["children"] = [self.INOUT_panel(), self.settings_panel()]
-        #                     VBox([self.plot_panel(), self.slicing_panel(), self.unit_panel()]),])]
+        #                    VBox([self.plot_panel(), self.slicing_panel(), self.unit_panel()]),])]
 
         super().__init__(*args, **kwargs)
         self._dom_classes += ("getMolMap row",)
@@ -116,12 +120,11 @@ class SimpleGui(Box):
         loadbutton = Button(color='black', background_color='AliceBlue',
                             description="Upload Geometry", margin=0, padding=3)
         savebutton = Button(color='black', background_color='AliceBlue',
-                            description="Export Results", margin=0, padding = 3)
+                            description="Export Results", margin=0, padding=3)
         button_gap = Box(margin=11, background_color='blue')
         area = HBox(children=[loadbutton, button_gap, savebutton], margin=10)
         return ControlPanel(title="Import/Export Data", children=[area],
-                            border_width=2, border_radius=4, margin=10, padding = 0)
-        
+                            border_width=2, border_radius=4, margin=10, padding=0)
 
     def settings_panel(self):
         # getMolMap calulation settings.  NOTE: should only be called once.
@@ -147,7 +150,7 @@ class SimpleGui(Box):
 
         atomradscale_slider_text = "Atomic radius scaling factor:"
         atomradscale_slider_widget = FloatSlider(value=1, min=0, max=4)
-        link((self.model, 'rad_scale'), (radius_slider_widget, 'value'))
+        link((self.model, 'rad_scale'), (atomradscale_slider_widget, 'value'))
         atomradscale_slider = VBox(children=[HTML(value=atomradscale_slider_text),
                                              atomradscale_slider_widget],
                                    margin=margin,)
@@ -182,6 +185,7 @@ class SimpleGui(Box):
                            # border_radius=5,
                            border_width=3,
                            font_size=20)
+        runbutton.on_click(self.run_button_clicked)
 
         basic_tab = VBox(children=[atomrad_button, excludeH_button, ])
         sliders = VBox(children=[atomradscale_slider, radius_slider, sub_slider])
@@ -195,6 +199,10 @@ class SimpleGui(Box):
 
         return ControlPanel(title="getMolMap Settings", children=[main_window, runbutton],
                             border_width=2, border_radius=4, margin=10, padding=0)
+
+    def run_button_clicked(self, trait_name):
+        kwargs = self.model.get_values()
+        getmolmap.calc(**kwargs)
 
     def output_panel(self):
         pass

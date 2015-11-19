@@ -4,7 +4,7 @@
 Created on 2013.10.18.
 
 @author: András Olasz
-@version: 2015.07.15.dev.1
+@version: 2015.11.19.dev.1
 
 Legnagyobb részecske:
 Megkeressük az összes kontúron lévő 3szöget. (az, amelyik fehér és van fekete szomszédja).
@@ -285,9 +285,11 @@ class MolMap():
         self.c_atoms = c_atoms
         return xgeom, c_atoms
 
-def getmolmap(**kw):
+
+def calc(**kw):
     fold = kw['fold']
     sub = int(kw['sub'])
+    out = open(os.path.abspath(os.path.join(kw['output_folder'], kw['output_name'])), 'w')
     print('generating icosphere...')
 #    atomtype = 'special1'
     start = time.time()
@@ -311,12 +313,12 @@ def getmolmap(**kw):
         centrums = atomfilter(mm.geom, mm.atomtype)
         for radius in mm.radii:
             mm.radius = radius
-            print(fn, radius, end=' ')
+            print(fn, radius, end=' ', file=out, flush=True)
             for centrum in centrums:
                 mm.centrum = centrum
                 n = centrum[0]
                 centrum_symbol = centrum[1]
-                print('{}{}'.format(centrum_symbol, n), end=' ')
+                print('{}{}'.format(centrum_symbol, n), end=' ', file=out, flush=True)
                 xgeom, c_vdws = mm.get_xgeom()
 #                A hit is where the shadow cone of an atom is cast on the sphere of observation
                 hits = array.array('L')
@@ -325,27 +327,17 @@ def getmolmap(**kw):
 #                shadow of of shadow cones. A point can be counted several times.
                 for atom, c_vdw in zip(xgeom[~mm.mask], c_vdws[~mm.mask]):
                     hits.extend(tree.query_ball_point(atom[1:], c_vdw))
-#                    tree.query_ball_point          # delete this line?
 #                Make a unique list of all points in the shadow (hits)
                 hits = np.unique(np.array(hits, dtype=np.uint32))
                 numhits = len(hits)
                 coverage = numhits / numverts
-                print('{}'.format(coverage), end=' ')
+                print('{}'.format(coverage), end=' ', file=out, flush=True)
 #                If coverage is 100% no need to calculate maximum uncovered area
                 if coverage == 1.0:
-                    print('0.0', end=' ')
+                    print('0.0', end=' ', file=out, flush=True)
                     continue
                 for a in range(mm.num_angles):
                     if a > 0:
-#                        r3 = []
-#                        for i in range(3):
-#                            mi = hit_tree.data[rads3[1][i], :]
-#                            P1 = np.array([1,0,0]); P2 = np.array([2,0,0])
-#                            r3.append(sp.spatial.distance.euclidean(point_a, mi))
-#                        r3 = np.array(r3)
-#                        r = np.average(r3)
-#                        print('zero={}'.format(chord - r), end=' ')
-#                        print('r={}'.format(r), end=' ')
                         hits = np.union1d(hits, tree.query_ball_point(point_a, chord))
                     hit_tree = sp.spatial.cKDTree(verts[hits, :], leafsize=32)
                     misses = np.setdiff1d(np.arange(numverts, dtype=np.uint32),
@@ -368,10 +360,12 @@ def getmolmap(**kw):
                         idxs = ''.join([ELEMENTS[mm.geom[i, 0]].symbol + str(i + 1) for i in atoms])
                     except ValueError:
                         idxs = ''
-                    print('angle{}={}'.format(idxs, half_app_deg), end=' ')  # angle in degrees!!!
+                    # angle in degrees!!!
+                    print('angle{}={}'.format(idxs, half_app_deg), end=' ', file=out, flush=True)
 
-            print('')
+            print('', file=out, flush=True)
     end = time.time()
+    out.close()
     print('All done in {} s'.format(end - start))
 
 
@@ -381,7 +375,7 @@ def main(**new_kwargs):
     >>>> Analitikus finomítás
     >>>> xls
 
-    Az atomok projekciójánál az adott atom pontja körül addig irtjuk a pontokat nx.node_boundary-val,
+    Az atomok projekciójánál az adott atom pontja körül addig irtjuk a pontokat nx.node_boundary-val
     amíg a boundary node hibahatáron belül közelíti a projektált vdW sugarat.
     Esetleg kapásból kivághatunk egy theta+-rádiusz, fi+-rádiusz darabot és csak erre vizsgálódunk.
     A pontokat sorba lehetne rendezni növekvő theta, phi sorrendben. Sőt, esetleg analitikusan is
@@ -392,17 +386,20 @@ def main(**new_kwargs):
 
     import os
 
-    kwargs = {'atomtype' : 'Ge',
-              'fold' : os.path.abspath('D:\myworkspace\getMolMap\moldata\\20140816_gesub'),
-              'sub' : 6,
+    kwargs = {'atomtype': 'Pt',
+              'fold': os.path.abspath('../demo_molecules'),
+              # 'fold': os.path.abspath('D:\myworkspace\getMolMap\moldata\\20140816_gesub'),
+              'sub' : 3,
               'rad_type' : 'covrad', # Chose from covrad, atmrad, vdwrad
               'rad_scale' : 1.17, # Scale factor of chosen rad_type
               'radii': [0.,],
               'excludes' : [],
-              'num_angles': 1}
-
+              'num_angles': 1,
+              'output_folder': '../results',
+              'output_name': 'getmolmap_results',}
+              
     kwargs.update(new_kwargs)
-    getmolmap(**kwargs)
+    calc(**kwargs)
 
 if __name__ == '__main__':
     main()

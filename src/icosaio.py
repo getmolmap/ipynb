@@ -11,6 +11,7 @@ import numpy as np
 from elements import ELEMENTS
 
 def getxyz(fname, exclude=['']):
+    print(fname)
     with open(fname, 'r') as f:
         numatoms = int(f.readline().strip())
         geom = np.empty((numatoms, 4), dtype=np.float64)
