@@ -1,3 +1,7 @@
+*.swp
+.ipynb_checkpoints
+results/
+
 #################
 ## Eclipse
 #################
