@@ -18,7 +18,7 @@ from ipywidgets import (Box,
                         Text,
                         ToggleButtons,
                         VBox,)
-# import ipywidgets as widgets
+import ipywidgets as widgets
 from IPython import display
 from traitlets import HasTraits, link, Int, Float, Unicode, List, Bool
 from elements import ELEMENTS
@@ -111,20 +111,50 @@ class SimpleGui(Box):
         super().__init__(*args, **kwargs)
         self._dom_classes += ("getMolMap row",)
 
+
     def tight_layout(self):
         """ Tight layout for gui boxes/widgets """
         return display.HTML(LAYOUT_HTML_1)
 
     def INOUT_panel(self):
         # create correlation controls. NOTE: should only be called once.
-        loadbutton = Button(color='black', background_color='AliceBlue',
-                            description="Upload Geometry", margin=0, padding=3)
-        savebutton = Button(color='black', background_color='AliceBlue',
-                            description="Export Results", margin=0, padding=3)
+        # loadbutton = Button(color='black', background_color='AliceBlue',
+        #                     description="Upload Geometry", margin=0, padding=3)
+        file_widget = FileWidget()
+        self.model.file_widget = file_widget  # This line is for debugging only.
+
+        # Register an event to echo the filename when it has been changed.
+        def file_loading():
+            print('Loading "{}" ...'.format(file_widget.filename), end='', flush=True)
+        file_widget.on_trait_change(file_loading, 'filename')
+
+        # Register an event to echo the filename and contents when a file
+        # has been uploaded.
+        def file_loaded():
+            print(" done.")
+            with open('../moldata/{}'.format(file_widget.filename), 'w') as f:
+                f.write(file_widget.value)
+        file_widget.on_trait_change(file_loaded, 'value')
+
+        # Register an event to print an error message when a file could not
+        # be opened.  Since the error messages are not handled through
+        # traitlets but instead handled through custom msgs, the registration
+        # of the handler is different than file_loading and file_loaded above.
+        # Instead the API provided by the CallbackDispatcher must be used.
+        def file_failed():
+            print("Could not load file contents of %s" % file_widget.filename)
+        file_widget.errors.register_callback(file_failed)
+
+        # Downloading results is not working yet. Instruct the user to use the dashboard.
+        #TODO: show message to use the dashboard
+        #TODO: implement download properly
+        savebutton = Button(color='#586e75', background_color='#eee8d5',
+                            description="Export Results", margin=0, padding=1)
+        self.model.savebutton = savebutton
         button_gap = Box(margin=11, background_color='blue')
-        area = HBox(children=[loadbutton, button_gap, savebutton], margin=10)
-        return ControlPanel(title="Import/Export Data", children=[area],
-                            border_width=2, border_radius=4, margin=10, padding=0)
+        area = HBox(children=[file_widget, button_gap, savebutton], margin=0)
+        return ControlPanel(title="Upload geometry:", children=[area],
+                            border_width=2, border_radius=4, margin=0, padding=0)
 
     def settings_panel(self):
         # getMolMap calulation settings.  NOTE: should only be called once.
@@ -206,3 +236,32 @@ class SimpleGui(Box):
 
     def output_panel(self):
         pass
+
+
+class FileWidget(widgets.DOMWidget):
+    _view_name = Unicode('FilePickerView', sync=True)
+    value = Unicode(sync=True)
+    filename = Unicode(sync=True)
+
+    def __init__(self, **kwargs):
+        """Constructor"""
+        widgets.DOMWidget.__init__(self, **kwargs) # Call the base.
+
+        # Allow the user to register error callbacks with the following signatures:
+        #    callback()
+        #    callback(sender)
+        self.errors = widgets.CallbackDispatcher(accepted_nargs=[0, 1])
+
+        # Listen for custom msgs
+        self.on_msg(self._handle_custom_msg)
+
+    def _handle_custom_msg(self, content):
+        """Handle a msg from the front-end.
+
+        Parameters
+        ----------
+        content: dict
+            Content of the msg."""
+        if 'event' in content and content['event'] == 'error':
+            self.errors()
+            self.errors(self)

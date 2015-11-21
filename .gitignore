@@ -1,6 +1,7 @@
 *.swp
 .ipynb_checkpoints/
 results/
+moldata/
 
 #################
 ## Eclipse
