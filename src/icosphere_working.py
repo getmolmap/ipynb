@@ -27,16 +27,15 @@ class IcoSphere():
     Spherical coordinates convention follows geographic notation (r, theta, lambda), where
     r: positive real, theta: +-pi/2 from xy plane to z+, lamdba: +-pi from xz plane to y+.
     '''
-    def __init__(self, subdivision=2, size=1.0, hdf5_path='../progdata/'):
+    def __init__(self, subdivision=2, size=1.0):
         try:
-            df = pd.read_hdf(hdf5_path + 'icosphere_{}.h5'.format(subdivision))
+            df = pd.read_hdf('../progdata/icosphere_{}.h5'.format(subdivision))
             self.verts = np.array(df)
             del df
         except:
             self._create_icosahedron()
             self.subdivision = 0
             self.subdivide(subdivision)
-            #TODO: save verts to hdf5 format: hdf5_path + 'icosphere_{}.h5'
 
     def _create_icosahedron(self):
         '''

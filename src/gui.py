@@ -161,7 +161,7 @@ class SimpleGui(Box):
         margin = 2
 
         sub_slider_text = "Subdivision value of the icosphere for numerical calculation:"
-        sub_slider_widget = IntSlider(value=5, min=1, max=8,)
+        sub_slider_widget = IntSlider(value=5, min=1, max=10,)
         link((self.model, 'sub'), (sub_slider_widget, 'value'))
         sub_slider = VBox(children=[HTML(value=sub_slider_text), sub_slider_widget],
                           margin=margin, width='100%')

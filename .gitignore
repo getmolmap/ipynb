@@ -1,7 +1,9 @@
 *.swp
+*.h5
 .ipynb_checkpoints/
-results/
-moldata/
+results/*
+moldata/*
+progdata/*.h5
 
 #################
 ## Eclipse

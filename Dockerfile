@@ -14,10 +14,12 @@ ENV NB_USER jovyan
 
 RUN conda install --yes \
     'xlsxwriter' \
+    'pytables' \
     && conda clean -yt
 
 RUN conda install -n python2 --yes \
     'xlsxwriter' \
+    'pytables' \
     && conda clean -yt
 
 RUN mkdir /home/$NB_USER/work/demo_molecules && \
@@ -30,5 +32,7 @@ COPY *.ipynb /home/$NB_USER/work/
 COPY src /home/$NB_USER/work/src/
 COPY progdata /home/$NB_USER/work/progdata/
 COPY demo_molecules /home/$NB_USER/work/demo_molecules/
+
+RUN jupyter trust /home/$NB_USER/work/Start.ipynb
 
 
