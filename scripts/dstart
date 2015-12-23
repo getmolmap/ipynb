@@ -1,0 +1,10 @@
+#!/bin/bash
+export TOKEN=$( head -c 30 /dev/urandom | xxd -p )
+docker run --net=host -d -e CONFIGPROXY_AUTH_TOKEN=$TOKEN --name=proxy jupyter/configurable-http-proxy --default-target http://127.0.0.1:9999
+docker run --net=host -d -e CONFIGPROXY_AUTH_TOKEN=$TOKEN \
+           -v /var/run/docker.sock:/docker.sock \
+           jupyter/tmpnb python orchestrate.py --image='getmolmap' \
+           --pool_size=5 \
+           --max_dock_workers=1 \
+           --redirect_uri="/notebooks/Start.ipynb" \
+           --command="start-notebook.sh \"--NotebookApp.base_url={base_path} --NotebookApp.allow_origin='*' --port={port}\""
