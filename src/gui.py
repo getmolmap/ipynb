@@ -125,15 +125,18 @@ class SimpleGui(Box):
 
         # Register an event to echo the filename when it has been changed.
         def file_loading():
-            print('Loading "{}" ...'.format(file_widget.filename), end='', flush=True)
-        file_widget.on_trait_change(file_loading, 'filename')
+            file_widget.num_files = len(file_widget.filenames)
+#            print('Loading {} file(s)...'.format(file_widget.num_files), end='', flush=True)
+        file_widget.on_trait_change(file_loading, 'filenames')
 
         # Register an event to echo the filename and contents when a file
         # has been uploaded.
         def file_loaded():
-            print(" done.")
-            with open('../moldata/{}'.format(file_widget.filename), 'w') as f:
+            file_name = file_widget.filenames[-file_widget.num_files]
+            print("Uploading {} ...".format(file_name), end='', flush=True)
+            with open('../moldata/{}'.format(file_name), 'w') as f:
                 f.write(file_widget.value)
+            print("done.",)
         file_widget.on_trait_change(file_loaded, 'value')
 
         # Register an event to print an error message when a file could not
@@ -241,7 +244,8 @@ class SimpleGui(Box):
 class FileWidget(widgets.DOMWidget):
     _view_name = Unicode('FilePickerView', sync=True)
     value = Unicode(sync=True)
-    filename = Unicode(sync=True)
+    values = List([], sync=True)
+    filenames = List([], sync=True)
 
     def __init__(self, **kwargs):
         """Constructor"""

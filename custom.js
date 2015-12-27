@@ -53,7 +53,7 @@ require(["widgets/js/widget", "widgets/js/manager"], function(widget, manager){
     var FilePickerView = widget.DOMWidgetView.extend({
         render: function(){
             // Render the view.
-            this.setElement($('<input />')
+            this.setElement($('<input class="fileinput" multiple="multiple" name="datafile"  />')
                 .attr('type', 'file'));
         },
         
@@ -65,27 +65,32 @@ require(["widgets/js/widget", "widgets/js/manager"], function(widget, manager){
         handle_file_change: function(evt) { 
             // Handle when the user has changed the file.
             
-            // Retrieve the first (and only!) File from the FileList object
-            var file = evt.target.files[0];
-            if (file) {
+            // Retrieve the FileList object
+            var files = evt.target.files;
+            var filenames = [];
+            var file_readers = [];
+            console.log("Reading files:");
+
+            for (var i = 0, f; f = files[i]; i++) {
+                console.log("Filename: " + files[i].name);
+                console.log("Type: " + files[i].type);
+                console.log("Size: " + files[i].size + " bytes");
+                filenames.push(files[i].name);
 
                 // Read the file's textual content and set value to those contents.
                 var that = this;
-                var file_reader = new FileReader();
-                file_reader.onload = function(e) {
+                file_readers.push(new FileReader());
+                file_readers[i].onload = function(e) {
                     that.model.set('value', e.target.result);
                     that.touch();
                 }
-                file_reader.readAsText(file);
-            } else {
-
-                // The file couldn't be opened.  Send an error msg to the
-                // back-end.
-                this.send({ 'event': 'error' });
+                console.log("Reading file: " + files[i].name);
+                file_readers[i].readAsText(f);
             }
 
-            // Set the filename of the file.
-            this.model.set('filename', file.name);
+            // Set the filenames of the files.
+            console.log("Filenames: " + filenames);
+            this.model.set('filenames', filenames);
             this.touch();
         },
     });
