@@ -120,23 +120,35 @@ class SimpleGui(Box):
         # create correlation controls. NOTE: should only be called once.
         # loadbutton = Button(color='black', background_color='AliceBlue',
         #                     description="Upload Geometry", margin=0, padding=3)
+        upload_area = VBox()
+        symbols = [e.symbol for e in ELEMENTS]
         file_widget = FileWidget()
         self.model.file_widget = file_widget  # This line is for debugging only.
 
         # Register an event to echo the filename when it has been changed.
         def file_loading():
-            file_widget.num_files = len(file_widget.filenames)
-#            print('Loading {} file(s)...'.format(file_widget.num_files), end='', flush=True)
+            file_names = file_widget.filenames
+            old_children = list(upload_area.children)
+            new_children = []
+            for file_name in file_names:
+                element_picker = Dropdown(description=file_name, options=symbols,
+                                                value='H', color='Black', height=32,
+                                                width=32, font_size=14,)
+                atomnum_picker = SelectMultiple(options=[str(i + 1) for i in range(100)],
+                                                         value=['1'], color='Black', height=32,
+                                                         width=64, font_size=14,)
+                line = HBox([element_picker, atomnum_picker])
+                new_children.append(line)
+            upload_area.children = old_children + new_children
+            # print('Loading {} file(s)...'.format(file_widget.num_files), end='', flush=True)
         file_widget.on_trait_change(file_loading, 'filenames')
 
         # Register an event to echo the filename and contents when a file
         # has been uploaded.
         def file_loaded():
-            file_name = file_widget.filenames[-file_widget.num_files]
-            print("Uploading {} ...".format(file_name), end='', flush=True)
+            file_name = file_widget.file_name
             with open('../moldata/{}'.format(file_name), 'w') as f:
                 f.write(file_widget.value)
-            print("done.",)
         file_widget.on_trait_change(file_loaded, 'value')
 
         # Register an event to print an error message when a file could not
@@ -145,7 +157,7 @@ class SimpleGui(Box):
         # of the handler is different than file_loading and file_loaded above.
         # Instead the API provided by the CallbackDispatcher must be used.
         def file_failed():
-            print("Could not load file contents of %s" % file_widget.filename)
+            print("Could not load some file contents.")
         file_widget.errors.register_callback(file_failed)
 
         # Downloading results is not working yet. Instruct the user to use the dashboard.
@@ -155,7 +167,8 @@ class SimpleGui(Box):
                             description="Export Results", margin=0, padding=1)
         self.model.savebutton = savebutton
         button_gap = Box(margin=11, background_color='blue')
-        area = HBox(children=[file_widget, button_gap, savebutton], margin=0)
+        button_area = HBox([file_widget, button_gap, savebutton], margin=0)
+        area = VBox([button_area, upload_area])
         return ControlPanel(title="Upload geometry:", children=[area],
                             border_width=2, border_radius=4, margin=0, padding=0)
 
@@ -244,7 +257,7 @@ class SimpleGui(Box):
 class FileWidget(widgets.DOMWidget):
     _view_name = Unicode('FilePickerView', sync=True)
     value = Unicode(sync=True)
-    values = List([], sync=True)
+    file_name = Unicode(sync=True)
     filenames = List([], sync=True)
 
     def __init__(self, **kwargs):

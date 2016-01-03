@@ -48,7 +48,7 @@
  * @static
  */
 
-require(["widgets/js/widget", "widgets/js/manager"], function(widget, manager){
+require(["nbextensions/widgets/widgets/js/widget", "nbextensions/widgets/widgets/js/manager"], function(widget, manager){
 
     var FilePickerView = widget.DOMWidgetView.extend({
         render: function(){
@@ -78,18 +78,20 @@ require(["widgets/js/widget", "widgets/js/manager"], function(widget, manager){
                 filenames.push(files[i].name);
 
                 // Read the file's textual content and set value to those contents.
-                var that = this;
                 file_readers.push(new FileReader());
-                file_readers[i].onload = function(e) {
-                    that.model.set('value', e.target.result);
-                    that.touch();
-                }
-                console.log("Reading file: " + files[i].name);
+                file_readers[i].onload = (function(theFile) {
+                    return function(e) {
+                        that.model.set('file_name', escape(theFile.name));
+                        that.model.set('value', e.target.result);
+                        that.touch();
+                        console.log("file loaded: " + theFile.name);
+                    };
+                })(f);
+
                 file_readers[i].readAsText(f);
             }
 
             // Set the filenames of the files.
-            console.log("Filenames: " + filenames);
             this.model.set('filenames', filenames);
             this.touch();
         },
