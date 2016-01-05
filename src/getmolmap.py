@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 2013.10.18.
 
 @author: András Olasz
-@version: 2016.01.05.dev.1
+@version: 2016.01.05.dev.2
 
-Legnagyobb részecske:
-Megkeressük az összes kontúron lévő 3szöget. (az, amelyik fehér és van fekete szomszédja).
-És a maradékon újra megkeressük a kontúrokat. Az utolsó fehér pont a nyerő. Erre megnézzük az
-összes távolságot az eredeti kontúrtól.
-'''
+"""
 
 #TODO: 1. Atomi rádiuszok skálafaktorral
 #TODO: 2. Egyéb atomi rádiuszok
@@ -31,142 +27,6 @@ import icosaio
 import icosphere as ico
 # import scipy.spatial as sp
 sp = scipy
-
-def atomfilter(geom, atomtype):
-    anums = geom[:, 0]
-    symbols = [ELEMENTS[anum].symbol for anum in anums]
-    coords = geom[:, 1:]
-    results = []
-    if atomtype == 'special1':
-        #Find Pd atoms, and  the closest atom to Pd
-        for i, symbol, coord in zip(range(len(symbols)), symbols, coords):
-            if symbol.lower() == 'pd':
-                results.append((i+1, symbol, coord))
-        nearest = results[0]
-        mindist = 10.0
-        for i, symbol, coord in zip(range(len(symbols)), symbols, coords):
-            dist = distance(results[0][2], coord)
-            if symbol.lower() != 'pd' and dist < mindist:
-                mindist = dist
-                nearest = (i+1, symbol, coord)
-#                 print(symbol.lower(), i+1, mindist)
-        if nearest[1].lower() not in ('si', 'c', 'p'):
-            print('Warning, nearest atom to Pd is:', nearest[1])
-        results.append(nearest)
-    elif atomtype in ['Si', 'Ge']:
-        results = []
-        carbons = []
-        for i, symbol, coord in zip(range(len(symbols)), symbols, coords):
-            if symbol == atomtype:
-                results.append((i+1, symbol, coord))
-            elif symbol == 'C':
-#                 print('Carbon found.')
-                carbons.append((i+1, symbol, coord))
-        if len(results) <= 2:
-            return results
-        iso_coords = [atom[2] for atom in results]
-        carbon_coords = [atom[2] for atom in carbons]
-        maxbond = ELEMENTS[atomtype].vdwrad * 1.3
-        maxbondC = 2.2
-        nCneighbors = np.zeros(len(results))
-        selfneighbors = np.zeros(len(results))
-        if len(carbon_coords) > 1:
-            for i, atom in zip(range(len(results)), results):
-                coord = atom[2]
-                dists = sp.spatial.distance.cdist(np.array([coord]), np.array(carbon_coords))
-                nCneighbors[i] = len(dists[dists <= maxbondC])
-            if nCneighbors.min() == 0:
-                results = [result for i, result in enumerate(results) if nCneighbors[i] == 0]
-                return results
-        for i, atom in zip(range(len(results)), results):
-            coord = atom[2]
-            coords2 = iso_coords.copy()
-            del coords2[i]
-            dists = sp.spatial.distance.cdist(np.array([coord]), np.array(coords2))
-            n = len(dists[dists < maxbond])
-            selfneighbors[i] = n
-        results = [result for i, result in enumerate(results) if selfneighbors[i] > 0]
-    else:
-        for i, symbol, coord in zip(range(len(symbols)), symbols, coords):
-            if symbol == atomtype:
-                results.append((i+1, symbol, coord))
-    return results
-
-def distance(a, b):
-    return math.sqrt(sum([(b[i] - a[i])**2 for i in range(len(a))]))
-
-def get_polar(verts):
-    xyz = np.array(verts)
-    ptsnew = np.hstack((xyz, np.zeros(xyz.shape)))
-    xy = xyz[:,0]**2 + xyz[:,1]**2
-    #ptsnew[:,3] = np.sqrt(xy + xyz[:,2]**2)
-    ptsnew[:,4] = np.arctan2(np.sqrt(xy), xyz[:,2]) # for elevation angle defined from Z-axis down
-    #ptsnew[:,4] = np.arctan2(xyz[:,2], np.sqrt(xy)) # for elevation angle defined from XY-plane up
-    ptsnew[:,5] = np.arctan2(xyz[:,1], xyz[:,0])
-    return ptsnew
-
-def polar_ang_diff(p1, p2):
-    theta = p2[0] - p1[0]
-    if theta < 0.:
-        theta = theta + math.pi
-    phi = p2[1] - p1[1]
-    if phi > math.pi:
-        phi - math.pi * 2.0
-    elif phi < -1.0 * math.pi:
-        phi + math.pi * 2.0
-    return [phi, theta]
-
-def get_boundary_nodes(G, pentagons):
-#     if len(G) == 88:
-#         print(G.degree())/
-    return [i[0] for i in G.degree_iter() if i[1] < 6] #or (i[1] in pentagons and i[1] < 5)]
-
-def mask_centrum(geom, n, atomtype=None):
-    symbols = geom[0]
-    coords = geom[1]
-    xcoords = ma.array(coords)
-    xcoords[n - 1] = ma.masked
-    return(symbols, xcoords)
-
-def move_origin_to_centrum(geom, n, atomtype=None):
-    xgeom = geom.copy()
-    centrum = xgeom[n -1]
-    xgeom[:, 1:] = xgeom[:, 1:] - centrum[1:]
-#     xgeom = ma.array(xgeom)
-#     xgeom[n - 1] = ma.masked
-#     print(xgeom)
-    xgeom = np.delete(xgeom, n - 1, axis=0) #remove centrum instead of masking it out
-    return xgeom
-
-def get_xgeom(geom, n, atomtype, radius):
-    xgeom = move_origin_to_centrum(geom, n, atomtype)
-    distances = np.linalg.norm(xgeom[:, 1:], axis=1)
-#         print('\ndistances:', distances[0])
-    vdwrads = np.array([ELEMENTS[anum].vdwrad for anum in xgeom[:, 0]])
-    vperd = vdwrads / distances
-    #If an atom is closer than its vdW radius, make its half apperture 90 degrees
-    vperd[vperd > 1.0] = 1.0
-#         print('\nvdwrads:', vdwrads / distances)
-#         for i in range(len(vdwrads)):
-#             _x = np.arcsin(vdwrads[i] / distances[i])
-#             if np.isnan(_x):
-#                 print('\nXXX', vdwrads[i], distances[i], vdwrads[i] / distances[i])
-    half_apertures = np.arcsin(vperd)
-#         print('\ngamma:', half_apertures[0])
-    if radius > 0.0:
-        for i in range(len(xgeom)):
-            if distances[i] >= radius + vdwrads[i]:
-                half_apertures[i] = 0.0
-            elif distances[i] < math.sqrt(radius ** 2 + vdwrads[i] ** 2):
-                pass
-            else:
-                half_apertures[i] = math.acos((radius**2 + distances[i]**2 - vdwrads[i]**2) /
-                                              (2 * radius * distances[i]))
-#               half_alpha = np.arccos((radius**2 + vdwrads**2 - distances**2) / (2 * radius * vdwrads))
-    xgeom[:, 1:] = xgeom[:, 1:] / distances[:, np.newaxis]
-    c_vdws = 2 * np.sin(half_apertures / 2)
-
-    return xgeom, c_vdws
 
 class lazyattr(object):
     """Lazy object attribute whose value is computed on first access."""
@@ -359,7 +219,7 @@ def calc(**kw):
                 logger(tag='Buried Volume', value=[coverage])
                 logger(tag='Centrum', value=[mm.centrum[1::-1]])
                 if coverage == 1.0:
-                    logger(tag='Atoms Touching the Cone', value=[np.NaN])
+                    logger(tag='Atoms on the Inverse Cone', value=[np.NaN])
                     logger(tag='Inverse Cone Angle', value=[0.])
                     continue
                 for a in range(num_angle):
@@ -383,11 +243,11 @@ def calc(**kw):
                     half_app_deg = half_app / math.pi * 180.
                     try:
                         atoms = mm.get3coneatms(point_a)
-                        idxs = [[ELEMENTS[mm.geom[i, 0]].symbol, str(i + 1)] for i in atoms]
+                        idxs = [[ELEMENTS[mm.geom[i, 0]].symbol, i + 1] for i in atoms]
                     except ValueError:
                         idxs = [['']]
                     # angle in degrees!!!
-                    logger(tag='Atoms Touching the Cone', value=idxs)
+                    logger(tag='Atoms on the Inverse Cone', value=idxs)
                     logger(tag='Inverse Cone Angle', value=[half_app_deg])
     end = time.time()
     if debug_level:
@@ -407,7 +267,7 @@ def main(**new_kwargs):
               'centrum_nums': [[5, ]] * 2,
               'fold': os.path.abspath('../demo_molecules'),
               # 'fold': os.path.abspath('D:\myworkspace\getMolMap\moldata\\20140816_gesub'),
-              'sub' : 7,
+              'sub' : 8,
               'rad_type' : 'covrad', # Chose from covrad, atmrad, vdwrad
               'rad_scales' : [1.17] * 2, # Scale factor of chosen rad_type
               'radii': [[0.,]] * 2,
