@@ -4,7 +4,7 @@
 Created on 2013.10.18.
 
 @author: András Olasz
-@version: 2015.11.19.dev.1
+@version: 2016.01.05.dev.1
 
 Legnagyobb részecske:
 Megkeressük az összes kontúron lévő 3szöget. (az, amelyik fehér és van fekete szomszédja).
@@ -189,7 +189,7 @@ class MolMap():
                     'rad_type': 'vdwrad',  # Chose from covrad, atmrad, vdwrad
                     # TODO implement custom atomic radii
                     'rad_scale': 1.0,  # Scale factor of chosen rad_type
-                    'radii': [0.,],
+                    'radius': 0.,
                     'excludes': [],
                     'num_angles': 1,}
         self.__dict__.update(defaults)
@@ -201,7 +201,7 @@ class MolMap():
 
     @lazyattr
     def path(self):
-        return os.path.join(self.fold, self.fn)
+        return os.path.join(self.fold, self.file_name)
 
     @lazyattr
     def geom(self):
@@ -229,8 +229,13 @@ class MolMap():
             return np.array([self.rad_scale * ELEMENTS[anum].atmrad for anum in self.geom[:, 0]])
 
     @lazyattr
-    def centrums(self):
-        return atomfilter(self.geom, self.atomtype)
+    def centrum(self):
+        """Return the proprties of the central atom.
+
+        Returns: (int:atom_number, str:symbol, np.array:coords)
+        """
+        i = self.centrum_num
+        return [i, self.symbols[i - 1], self.coords[i - 1]]
 
     @lazyattr
     def excludemask(self):
@@ -286,11 +291,28 @@ class MolMap():
         return xgeom, c_atoms
 
 
+def logger(**kw):
+    print('{}:'.format(kw['tag']), *kw['value'])
+
 def calc(**kw):
-    fold = kw['fold']
-    sub = int(kw['sub'])
-    out = open(os.path.abspath(os.path.join(kw['output_folder'], kw['output_name'])), 'w')
-    print('generating icosphere...')
+    # Sanitize input arguments
+    debug_level = kw.get('debug_level', 0)
+    kwargs = {}
+    file_names = [str(file_name) for file_name in kw['file_names']]
+    atom_types = [str(atom_type) for atom_type in kw['atom_types']]
+    centrum_nums = [[int(num) for num in nums] for nums in kw['centrum_nums']]
+    kwargs['fold'] = os.path.abspath(str(kw['fold']))
+    sub = kwargs['sub'] = int(kw['sub'])
+    rad_type = kwargs['rad_type'] =str(kw['rad_type'])
+    rad_scales = [float(rad_scale) for rad_scale in kw['rad_scales']]
+    radii = [[float(radius) for radius in radiuses] for radiuses in kw['radii']]
+    excludes = [[str(ex) for ex in exclude] for exclude in kw['excludes']]
+    num_angles = [int(num) for num in kw['num_angles']]
+    #TODO: Fix output
+    #out = open(os.path.abspath(os.path.join(str(kw['output_folder']),
+    #                                        str(kw['output_name']))), 'w')
+    if debug_level:
+        print('generating icosphere...')
 #    atomtype = 'special1'
     start = time.time()
     sphere = ico.IcoSphere(sub, 1)
@@ -298,45 +320,49 @@ def calc(**kw):
     verts = sphere.verts
     numverts = len(verts)
     edge_length = 1 / math.sin(2 * math.pi / 5) / 2 ** sub
-    print('icosphere done in {} s'.format(end - start))
-    print('egde length = {}'.format(edge_length))
-    print('number of vertices: {}'.format(numverts))
+    if debug_level:
+        print('icosphere done in {} s'.format(end - start))
+        print('egde length = {}'.format(edge_length))
+        print('number of vertices: {}'.format(numverts))
 #    generating KD-tree:
     start = time.time()
     tree = sp.spatial.cKDTree(verts, leafsize=32)
     end = time.time()
-    print('KD-tree done in', end - start, 's\n')
+    if debug_level:
+        print('KD-tree done in', end - start, 's\n')
     start = time.time()
-    for fn in os.listdir(fold):  # ['X903G1.xyz']:
-        mm = MolMap(**kw)
-        mm.geom = icosaio.getxyz(os.path.join(fold, fn), mm.excludes)
-        centrums = atomfilter(mm.geom, mm.atomtype)
-        for radius in mm.radii:
-            mm.radius = radius
-            print(fn, radius, end=' ', file=out, flush=True)
-            for centrum in centrums:
-                mm.centrum = centrum
-                n = centrum[0]
-                centrum_symbol = centrum[1]
-                print('{}{}'.format(centrum_symbol, n), end=' ', file=out, flush=True)
-                xgeom, c_vdws = mm.get_xgeom()
-#                A hit is where the shadow cone of an atom is cast on the sphere of observation
+    for file_name, atom_type, cent_nums, rad_scale, radiuses, excluded, num_angle in zip(
+      file_names, atom_types, centrum_nums, rad_scales, radii, excludes, num_angles):
+        kwargs['file_name'] = file_name
+        kwargs['atom_type'] = atom_type
+        kwargs['excludes'] = excluded
+        kwargs['num_angle'] = num_angle
+        logger(tag='File Name', value=[file_name])
+        logger(tag='IcoSphere Subdivision', value=[sub])
+        for radius in radiuses:
+            kwargs['radius'] = radius
+            kwargs['rad_scale'] = rad_scale
+            logger(tag='Cut Radius', value=[radius])
+            logger(tag='Type of Atomic Radii', value=[rad_type])
+            logger(tag='Scale Factor of Atomic Radii', value=[rad_scale])
+            logger(tag='Excluded Elements', value=excluded)
+            for centrum_num in cent_nums:
+                kwargs['centrum_num'] = centrum_num
+                mm = MolMap(**kwargs)
+                mm.get_xgeom()
                 hits = array.array('L')
-#                TODO: rewrite collecting hits as setting False values in a boolean array
-#                Find all the points on the sphere of observation, which are in the collective
-#                shadow of of shadow cones. A point can be counted several times.
-                for atom, c_vdw in zip(xgeom[~mm.mask], c_vdws[~mm.mask]):
-                    hits.extend(tree.query_ball_point(atom[1:], c_vdw))
-#                Make a unique list of all points in the shadow (hits)
+                for atom, c_atom in zip(mm.xgeom[~mm.mask], mm.c_atoms[~mm.mask]):
+                    hits.extend(tree.query_ball_point(atom[1:], c_atom))
                 hits = np.unique(np.array(hits, dtype=np.uint32))
                 numhits = len(hits)
                 coverage = numhits / numverts
-                print('{}'.format(coverage), end=' ', file=out, flush=True)
-#                If coverage is 100% no need to calculate maximum uncovered area
+                logger(tag='Buried Volume', value=[coverage])
+                logger(tag='Centrum', value=[mm.centrum[1::-1]])
                 if coverage == 1.0:
-                    print('0.0', end=' ', file=out, flush=True)
+                    logger(tag='Atoms Touching the Cone', value=[np.NaN])
+                    logger(tag='Inverse Cone Angle', value=[0.])
                     continue
-                for a in range(mm.num_angles):
+                for a in range(num_angle):
                     if a > 0:
                         hits = np.union1d(hits, tree.query_ball_point(point_a, chord))
                     hit_tree = sp.spatial.cKDTree(verts[hits, :], leafsize=32)
@@ -357,47 +383,40 @@ def calc(**kw):
                     half_app_deg = half_app / math.pi * 180.
                     try:
                         atoms = mm.get3coneatms(point_a)
-                        idxs = ''.join([ELEMENTS[mm.geom[i, 0]].symbol + str(i + 1) for i in atoms])
+                        idxs = [[ELEMENTS[mm.geom[i, 0]].symbol, str(i + 1)] for i in atoms]
                     except ValueError:
-                        idxs = ''
+                        idxs = [['']]
                     # angle in degrees!!!
-                    print('angle{}={}'.format(idxs, half_app_deg), end=' ', file=out, flush=True)
-
-            print('', file=out, flush=True)
+                    logger(tag='Atoms Touching the Cone', value=idxs)
+                    logger(tag='Inverse Cone Angle', value=[half_app_deg])
     end = time.time()
-    out.close()
-    print('All done in {} s'.format(end - start))
+    if debug_level:
+        print('All done in {} s'.format(end - start))
 
 
 def main(**new_kwargs):
-    '''TODO:
-    A különböző felosztások relatív hibáinak átlaga és maximuma.
-    >>>> Analitikus finomítás
-    >>>> xls
-
-    Az atomok projekciójánál az adott atom pontja körül addig irtjuk a pontokat nx.node_boundary-val
-    amíg a boundary node hibahatáron belül közelíti a projektált vdW sugarat.
-    Esetleg kapásból kivághatunk egy theta+-rádiusz, fi+-rádiusz darabot és csak erre vizsgálódunk.
-    A pontokat sorba lehetne rendezni növekvő theta, phi sorrendben. Sőt, esetleg analitikusan is
-    leképezhetők valahogy.
+    '''Tester function.
     '''
-#TODO: include H atoms
-#TODO: oldószer minimális szöge
-
+#TODO: minimal angle of substrate/solvent molecule
+#TODO: xlsxwriter
+#TODO: error estimation, error propagation study
     import os
 
-    kwargs = {'atomtype': 'Pt',
+    kwargs = {'file_names': ['iprc.xyz', 'iprc2.xyz'],
+              'atom_types': ['Pt'] * 2,
+              'centrum_nums': [[5, ]] * 2,
               'fold': os.path.abspath('../demo_molecules'),
               # 'fold': os.path.abspath('D:\myworkspace\getMolMap\moldata\\20140816_gesub'),
-              'sub' : 3,
+              'sub' : 7,
               'rad_type' : 'covrad', # Chose from covrad, atmrad, vdwrad
-              'rad_scale' : 1.17, # Scale factor of chosen rad_type
-              'radii': [0.,],
-              'excludes' : [],
-              'num_angles': 1,
+              'rad_scales' : [1.17] * 2, # Scale factor of chosen rad_type
+              'radii': [[0.,]] * 2,
+              'excludes' : [['H'], ] * 2,
+              'num_angles': [2] * 2,
               'output_folder': '../results',
-              'output_name': 'getmolmap_results',}
-              
+              'output_name': 'getmolmap_results',
+              'debug_level': 1,}
+
     kwargs.update(new_kwargs)
     calc(**kwargs)
 

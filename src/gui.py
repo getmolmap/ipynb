@@ -23,6 +23,7 @@ from IPython import display
 from traitlets import HasTraits, link, Int, Float, Unicode, List, Bool
 from elements import ELEMENTS
 import getmolmap
+import icosaio
 
 LAYOUT_HTML_1 = '<style> \
 .widget-area .getMolMap .panel-body{padding: 0;} \
@@ -34,7 +35,9 @@ LAYOUT_HTML_1 = '<style> \
 
 
 class SimpleDataModel(HasTraits):
-    atomtype = Unicode('Pt')
+    file_names = List(trait=Unicode, default_value=['iprc.xyz', 'iprc2.xyz'])
+    atom_types = List(trait=Unicode, default_value=['Pt', 'Pt'])
+    atom_nums = List(trait=List(trait=Int()), default_value=[[5], [5]])
     fold = Unicode('../demo_molecules')
     sub = Int(6)
     rad_type = Unicode('covrad')
@@ -169,7 +172,9 @@ class SimpleGui(Box):
         button_gap = Box(margin=11, background_color='blue')
         button_area = HBox([file_widget, button_gap, savebutton], margin=0)
         area = VBox([button_area, upload_area])
-        return ControlPanel(title="Upload geometry:", children=[area],
+        formats = HTML('Supported file extensions: .xyz, .pdb, .cif, and plenty \
+        <a href="http://openbabel.org/wiki/List_of_extensions" target="_blank"> more</a>.')
+        return ControlPanel(title="Upload geometry:", children=[formats, area],
                             border_width=2, border_radius=4, margin=0, padding=0)
 
     def settings_panel(self):
@@ -252,6 +257,7 @@ class SimpleGui(Box):
 
     def output_panel(self):
         pass
+        """<div style="height:100px;width:200px;overflow:auto;border:8px solid yellowgreen;padding:2%">This </div>"""
 
 
 class FileWidget(widgets.DOMWidget):
