@@ -16,10 +16,12 @@ import time
 import math
 import os
 import array
+from collections import defaultdict
 import numpy as np
-import numpy.ma as ma
+# import numpy.ma as ma
 import scipy
 import scipy.spatial
+import xlsxwriter
 # from scipy.spatial import cKDTree
 # from scipy.spatial import distance as sp_dis
 from elements import ELEMENTS
@@ -27,6 +29,7 @@ import icosaio
 import icosphere as ico
 # import scipy.spatial as sp
 sp = scipy
+
 
 class lazyattr(object):
     """Lazy object attribute whose value is computed on first access."""
@@ -108,7 +111,7 @@ class MolMap():
 #        Using the formula angle = 2 * arcsin(chord / (2*R)):
         atom_view_angles = 2 * np.arcsin(mc_atoms / 2)
         nearest3angles = np.argpartition(p_angles - atom_view_angles, 3)
-        #return the indices relative to the original geom
+#        return the indices relative to the original geom
         return np.arange(len(self.geom))[~self.mask][nearest3angles[:3]]
 #        return mxgeom[nearest3angles]
 
@@ -151,26 +154,58 @@ class MolMap():
         return xgeom, c_atoms
 
 
-def logger(**kw):
-    print('{}:'.format(kw['tag']), *kw['value'])
+class Logger():
+    def __init__(self, **kw):
+        self.debug_level = kw.get('debug_level', 0)
+        out = kw.get('out', '../result/getmolmap_results') + '.xlsx'
+        sheet_name = kw.get('sheet_name', 'getMolMap')
+        self.workbook = xlsxwriter.Workbook(out)
+        self.worksheet = self.workbook.add_worksheet(sheet_name)
+        self.row = 0
+        tags = ['File Name', 'IcoSphere Subdivision', 'Cut Radius', 'Type of Atomic Radii',
+                'Scale Factor of Atomic Radii', 'Excluded Elements', 'Buried Volume',
+                'Centrum', 'Atoms on the Inverse Cone', 'Inverse Cone Angle']
+        self.tags = tags
+        self.decimals = defaultdict(int, {tags[2]: 3, tags[4]: 2, tags[6]: 3, tags[9]: 1})
+
+    def log(self, **kw):
+        tag = kw['tag']
+        value = kw['value']
+        self.decimals.get
+        decimals = self.decimals[tag]
+        if decimals:
+            num_format = self.workbook.add_format()
+            num_format.set_num_format('0.00')
+        elif tag in ('Excluded Elements', 'Atoms on the Inverse Cone'):
+            for i, v in enumerate(value):
+                self.worksheet.write(self.row, i, value[0])
+        else:
+            self.worksheet.write(self.row, 0, value[0])
+        if self.debug_level:
+            print('{}:'.format(kw['tag']), *kw['value'])
+        self.row += 1
+
+    def close(self):
+        self.workbook.close()
+
 
 def calc(**kw):
     # Sanitize input arguments
-    debug_level = kw.get('debug_level', 0)
+    debug_level = str(kw.get('debug_level', 0))
     kwargs = {}
     file_names = [str(file_name) for file_name in kw['file_names']]
     atom_types = [str(atom_type) for atom_type in kw['atom_types']]
     centrum_nums = [[int(num) for num in nums] for nums in kw['centrum_nums']]
     kwargs['fold'] = os.path.abspath(str(kw['fold']))
     sub = kwargs['sub'] = int(kw['sub'])
-    rad_type = kwargs['rad_type'] =str(kw['rad_type'])
+    rad_type = kwargs['rad_type'] = str(kw['rad_type'])
     rad_scales = [float(rad_scale) for rad_scale in kw['rad_scales']]
     radii = [[float(radius) for radius in radiuses] for radiuses in kw['radii']]
     excludes = [[str(ex) for ex in exclude] for exclude in kw['excludes']]
     num_angles = [int(num) for num in kw['num_angles']]
-    #TODO: Fix output
-    #out = open(os.path.abspath(os.path.join(str(kw['output_folder']),
-    #                                        str(kw['output_name']))), 'w')
+    out = os.path.abspath(os.path.join(str(kw['output_folder']), str(kw['output_name'])))
+    logger = Logger(out=out, debug_level=debug_level)
+    log = logger.log
     if debug_level:
         print('generating icosphere...')
 #    atomtype = 'special1'
@@ -197,15 +232,15 @@ def calc(**kw):
         kwargs['atom_type'] = atom_type
         kwargs['excludes'] = excluded
         kwargs['num_angle'] = num_angle
-        logger(tag='File Name', value=[file_name])
-        logger(tag='IcoSphere Subdivision', value=[sub])
+        log(tag='File Name', value=[file_name])
+        log(tag='IcoSphere Subdivision', value=[sub])
         for radius in radiuses:
             kwargs['radius'] = radius
             kwargs['rad_scale'] = rad_scale
-            logger(tag='Cut Radius', value=[radius])
-            logger(tag='Type of Atomic Radii', value=[rad_type])
-            logger(tag='Scale Factor of Atomic Radii', value=[rad_scale])
-            logger(tag='Excluded Elements', value=excluded)
+            log(tag='Cut Radius', value=[radius])
+            log(tag='Type of Atomic Radii', value=[rad_type])
+            log(tag='Scale Factor of Atomic Radii', value=[rad_scale])
+            log(tag='Excluded Elements', value=excluded)
             for centrum_num in cent_nums:
                 kwargs['centrum_num'] = centrum_num
                 mm = MolMap(**kwargs)
@@ -216,11 +251,11 @@ def calc(**kw):
                 hits = np.unique(np.array(hits, dtype=np.uint32))
                 numhits = len(hits)
                 coverage = numhits / numverts
-                logger(tag='Buried Volume', value=[coverage])
-                logger(tag='Centrum', value=[mm.centrum[1::-1]])
+                log(tag='Buried Volume', value=[coverage])
+                log(tag='Centrum', value=[mm.centrum[1::-1]])
                 if coverage == 1.0:
-                    logger(tag='Atoms on the Inverse Cone', value=[np.NaN])
-                    logger(tag='Inverse Cone Angle', value=[0.])
+                    log(tag='Atoms on the Inverse Cone', value=[np.NaN])
+                    log(tag='Inverse Cone Angle', value=[0.])
                     continue
                 for a in range(num_angle):
                     if a > 0:
@@ -243,15 +278,16 @@ def calc(**kw):
                     half_app_deg = half_app / math.pi * 180.
                     try:
                         atoms = mm.get3coneatms(point_a)
-                        idxs = [[ELEMENTS[mm.geom[i, 0]].symbol, i + 1] for i in atoms]
+                        idxs = [ELEMENTS[mm.geom[i, 0]].symbol + str(i + 1) for i in atoms]
                     except ValueError:
                         idxs = [['']]
                     # angle in degrees!!!
-                    logger(tag='Atoms on the Inverse Cone', value=idxs)
-                    logger(tag='Inverse Cone Angle', value=[half_app_deg])
+                    log(tag='Atoms on the Inverse Cone', value=idxs)
+                    log(tag='Inverse Cone Angle', value=[half_app_deg])
     end = time.time()
     if debug_level:
         print('All done in {} s'.format(end - start))
+    logger.close()
 
 
 def main(**new_kwargs):
@@ -267,7 +303,7 @@ def main(**new_kwargs):
               'centrum_nums': [[5, ]] * 2,
               'fold': os.path.abspath('../demo_molecules'),
               # 'fold': os.path.abspath('D:\myworkspace\getMolMap\moldata\\20140816_gesub'),
-              'sub' : 8,
+              'sub' : 7,
               'rad_type' : 'covrad', # Chose from covrad, atmrad, vdwrad
               'rad_scales' : [1.17] * 2, # Scale factor of chosen rad_type
               'radii': [[0.,]] * 2,
