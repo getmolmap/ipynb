@@ -7,9 +7,6 @@ Created on 2013.10.18.
 @version: 2016.01.05.dev.2
 
 """
-
-#TODO: 1. Atomi rádiuszok skálafaktorral
-#TODO: 2. Egyéb atomi rádiuszok
 #TODO: 3. Egyéni atomi rádiuszok
 
 import time
@@ -141,7 +138,7 @@ class MolMap():
                     half_apertures[i] = math.acos((radius**2 + distances[i]**2 - atomrads[i]**2) /
                                                   (2 * radius * distances[i]))
 #                    This is the twighlight zone. Atoms at this special distance need special
-#                    special treatment. The radius of the observation zone cuts into their
+#                    treatment. The radius of the observation zone cuts into their
 #                    atomrad sphere in such a way that the remaining object's half aperture becomes
 #                    smaller than the arcsin(vperd) value. The length of the chord is used in the
 #                    formula.
@@ -171,16 +168,18 @@ class Logger():
     def log(self, **kw):
         tag = kw['tag']
         value = kw['value']
+        self.worksheet.write(self.row, 0, tag)
         self.decimals.get
         decimals = self.decimals[tag]
         if decimals:
             num_format = self.workbook.add_format()
-            num_format.set_num_format('0.00')
+            num_format.set_num_format('0.{}'.format('0' * decimals))
+            self.worksheet.write(self.row, 1, value[0])
         elif tag in ('Excluded Elements', 'Atoms on the Inverse Cone'):
             for i, v in enumerate(value):
-                self.worksheet.write(self.row, i, value[0])
+                self.worksheet.write(self.row, i + 1, value[0])
         else:
-            self.worksheet.write(self.row, 0, value[0])
+            self.worksheet.write(self.row, 1, value[0])
         if self.debug_level:
             print('{}:'.format(kw['tag']), *kw['value'])
         self.row += 1
