@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import os
 from ipywidgets import (Box,
                         Button,
                         Checkbox,
@@ -23,7 +24,6 @@ from IPython import display
 from traitlets import HasTraits, link, Int, Float, Unicode, List, Bool
 from elements import ELEMENTS
 import getmolmap
-import icosaio
 
 LAYOUT_HTML_1 = '<style> \
 .widget-area .getMolMap .panel-body{padding: 0;} \
@@ -35,27 +35,32 @@ LAYOUT_HTML_1 = '<style> \
 
 
 class SimpleDataModel(HasTraits):
-    file_names = List(trait=Unicode, default_value=['iprc.xyz', 'iprc2.xyz'])
-    atom_types = List(trait=Unicode, default_value=['Pt', 'Pt'])
-    atom_nums = List(trait=List(trait=Int()), default_value=[[5], [5]])
-    fold = Unicode('../demo_molecules')
-    sub = Int(6)
-    rad_type = Unicode('covrad')
-    rad_scale = Float(1.17)
-    radius = Float(0)
-    radii = List(trait=Float, default_value=[0., ], minlen=1)
-    excludeH = Bool(False)
-    excludes = List(trait=Unicode)
-    num_angles = Int(1)
-    output_folder = Unicode('../results')
-    output_name = Unicode('getmolmap_results')
+    file_names = List(trait=Unicode, default_value=['iprc.xyz', 'iprc2.xyz'], sync=True)
+    atom_types = List(trait=Unicode, default_value=['Pt', 'Pt'], sync=True)
+    centrum_nums = List(trait=List(trait=Int()), default_value=[[5], [5]], sync=True)
+    fold = Unicode('./demo_molecules', sync=True)
+    sub = Int(6, sync=True)
+    rad_type = Unicode('covrad', sync=True)
+    rad_scale = Float(1.17, sync=True)
+#    rad_scales = List(trait=Float, default_value=[1.17, 1.17], sync=True)
+#    radii = List(trait=List(trait=Float()), default_value=[[0.], [0.]], sync=True)
+    radius = Float(0.0, sync=True)
+    excludeH = Bool(False, sync=True)
+    excludes = List(trait=Unicode, default_value=['H'], sync=True)
+    num_angles = List(trait=Int, default_value=[2, 2], sync=True)
+    output_folder = Unicode('./results', sync=True)
+    output_name = Unicode('getmolmap_results', sync=True)
+    table = Bool(True, sync=True)
+    debug_level = Int(0, sync=True)
 
     def get_values(self):
         values = dict([(k, getattr(self, k)) for k in self.trait_names()])
-        values['radii'] = set([values['radius'], ] + values['radii'])
+        values['hdf5_path'] = values.get('hdf5_path', os.path.abspath('./progdata'))
+        values['radii'] = [[0.] for i in values['atom_types']]
+        values['rad_scales'] = [values['rad_scale'] for i in values['atom_types']]
         #TODO: not elegant:
         dont = "Don't exclude any elements"
-        values['excludes'] = [e for e in values['excludes'] if dont != e]
+        values['excludes'] = [e for e in values['excludes'] if e != dont]
         if values['excludeH']:
             values['excludes'] = list(set(values['excludes'] + ['H']))
         return values
@@ -254,6 +259,9 @@ class SimpleGui(Box):
     def run_button_clicked(self, trait_name):
         kwargs = self.model.get_values()
         getmolmap.calc(**kwargs)
+#        DataFrame.to_html(buf=None, columns=None, col_space=None, colSpace=None, header=True, index=True, na_rep='NaN', formatters=None, float_format=None, sparsify=None, index_names=True, justify=None, bold_rows=True, classes=None, escape=True, max_rows=None, max_cols=None, show_dimensions=False, notebook=False)
+#        df.style.set_properties(color="white", align="right")
+
 
     def output_panel(self):
         pass

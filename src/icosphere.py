@@ -4,12 +4,13 @@
 Created on 2013.10.25.
 
 @author: András Olasz
-@version: 2015.05.21.dev.1
+@version: 2016.05.09.dev.1
 
 This is a python/numpy remake of the C# code of Andreas Kahler
 @see: http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
 '''
 
+import os
 import math
 import time
 from itertools import combinations
@@ -28,15 +29,22 @@ class IcoSphere():
     r: positive real, theta: +-pi/2 from xy plane to z+, lamdba: +-pi from xz plane to y+.
     '''
     def __init__(self, subdivision=2, size=1.0, hdf5_path='../progdata/'):
-        try:
-            df = pd.read_hdf(hdf5_path + 'icosphere_{}.h5'.format(subdivision))
-            self.verts = np.array(df)
+        hdf5_path = os.path.abspath(hdf5_path)
+        fname = 'icosphere_{}.h5'.format(subdivision)
+        fpath = os.path.join(hdf5_path, fname)
+        if os.path.exists(hdf5_path):
+            try:
+                df = pd.read_hdf(fpath)
+                self.verts = np.array(df)
+            except:
+                self._create_icosahedron()
+                self.subdivision = 0
+                self.subdivide(subdivision)
+                df = pd.DataFrame(self.verts)
+                df.to_hdf(fpath, 'w', format='fixed')
             del df
-        except:
-            self._create_icosahedron()
-            self.subdivision = 0
-            self.subdivide(subdivision)
-            #TODO: save verts to hdf5 format: hdf5_path + 'icosphere_{}.h5'
+        else:
+            print('ERROR: {} does not exist'.format(hdf5_path))
 
     def _create_icosahedron(self):
         '''

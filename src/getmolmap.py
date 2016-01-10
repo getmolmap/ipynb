@@ -7,7 +7,7 @@ Created on 2013.10.18.
 @version: 2016.01.05.dev.2
 
 """
-#TODO: 3. Egyéni atomi rádiuszok
+#TODO: 1. Egyéni atomi rádiuszok
 
 import time
 import math
@@ -19,6 +19,7 @@ import numpy as np
 import scipy
 import scipy.spatial
 import xlsxwriter
+import pandas as pd
 # from scipy.spatial import cKDTree
 # from scipy.spatial import distance as sp_dis
 from elements import ELEMENTS
@@ -41,6 +42,75 @@ class lazyattr(object):
             return getattr(super(owner, instance), self.func.__name__)
         setattr(instance, self.func.__name__, result)
         return result
+
+
+class Logger():
+    def __init__(self, **kw):
+        self.debug_level = kw.get('debug_level', 0)
+        if kw.get('table', False):
+            self.df = pd.DataFrame(columns=('Description', '1', '2', '3'))
+        else:
+            self.df = False
+        out = kw.get('out', '../result/getmolmap_results') + '.xlsx'
+        sheet_name = kw.get('sheet_name', 'getMolMap')
+        self.workbook = xlsxwriter.Workbook(out)
+        self.worksheet = self.workbook.add_worksheet(sheet_name)
+        self.worksheet.set_column('A:A', 24)
+        self.worksheet.set_column('B:D', 16)
+        self.row = 0
+        tags = {'file_name': 'File Name',
+                'sub': 'IcoSphere Subdivision',
+                'radius': 'Cut Radius',
+                'rad_type': 'Type of Atomic Radii',
+                'atom_scale': 'Scale Factor of Atomic Radii',
+                'excludes': 'Excluded Elements',
+                'coverage': 'Buried Volume',
+                'centrum': 'Centrum',
+                'cone_atoms': 'Atoms on the Inverse Cone',
+                'angle': 'Inverse Cone Angle',}
+        self.tags = tags
+        self.decimals = defaultdict(int, {tags['radius']: 3,
+                                          tags['atom_scale']: 2,
+                                          tags['coverage']: 3,
+                                          tags['angle']: 1, })
+
+    def log(self, **kw):
+        tags = self.tags
+        tag = kw['tag']
+        value = kw['value']
+        plain_format = self.workbook.add_format({'bold': False})
+        cell_format = self.workbook.add_format({'align': 'center'})
+        decimals = self.decimals[tag]
+        options = {'level': 1, 'hidden': False}
+        if decimals:
+            xlsx_num_format = '0.{}'.format('0' * decimals)
+            num_format = self.workbook.add_format({'num_format': xlsx_num_format,
+                                                   'align': 'center', })
+            cell_format = num_format
+        elif tag == tags['centrum']:  # tag == self.tags[7]
+            value = [''.join([str(x) for x in value])]
+        if tag in (tags['file_name'], tags['coverage']):
+            options = {'level': 0, 'collapsed': False}
+        if tag == tags['file_name']:
+            plain_format.set_top(2)
+            cell_format.set_top(2)
+
+        self.worksheet.set_row(self.row, None, plain_format, options)
+        self.worksheet.write(self.row, 0, tag, plain_format)
+        self.worksheet.write_row(self.row, 1, value, cell_format)
+        if 'df' in dir(self):
+            row_values = ['', '', '']
+            for i in range(len(value)):
+                row_values[i] = value[i]
+            self.df.loc[self.row] = [tag] + row_values
+
+        if self.debug_level:
+            print('{}:'.format(kw['tag']), *kw['value'])
+        self.row += 1
+
+    def close(self):
+        self.workbook.close()
+        return self.df
 
 
 class MolMap():
@@ -151,46 +221,9 @@ class MolMap():
         return xgeom, c_atoms
 
 
-class Logger():
-    def __init__(self, **kw):
-        self.debug_level = kw.get('debug_level', 0)
-        out = kw.get('out', '../result/getmolmap_results') + '.xlsx'
-        sheet_name = kw.get('sheet_name', 'getMolMap')
-        self.workbook = xlsxwriter.Workbook(out)
-        self.worksheet = self.workbook.add_worksheet(sheet_name)
-        self.row = 0
-        tags = ['File Name', 'IcoSphere Subdivision', 'Cut Radius', 'Type of Atomic Radii',
-                'Scale Factor of Atomic Radii', 'Excluded Elements', 'Buried Volume',
-                'Centrum', 'Atoms on the Inverse Cone', 'Inverse Cone Angle']
-        self.tags = tags
-        self.decimals = defaultdict(int, {tags[2]: 3, tags[4]: 2, tags[6]: 3, tags[9]: 1})
-
-    def log(self, **kw):
-        tag = kw['tag']
-        value = kw['value']
-        self.worksheet.write(self.row, 0, tag)
-        self.decimals.get
-        decimals = self.decimals[tag]
-        if decimals:
-            num_format = self.workbook.add_format()
-            num_format.set_num_format('0.{}'.format('0' * decimals))
-            self.worksheet.write(self.row, 1, value[0])
-        elif tag in ('Excluded Elements', 'Atoms on the Inverse Cone'):
-            for i, v in enumerate(value):
-                self.worksheet.write(self.row, i + 1, value[0])
-        else:
-            self.worksheet.write(self.row, 1, value[0])
-        if self.debug_level:
-            print('{}:'.format(kw['tag']), *kw['value'])
-        self.row += 1
-
-    def close(self):
-        self.workbook.close()
-
-
 def calc(**kw):
     # Sanitize input arguments
-    debug_level = str(kw.get('debug_level', 0))
+    debug_level = int(kw.get('debug_level', 0))
     kwargs = {}
     file_names = [str(file_name) for file_name in kw['file_names']]
     atom_types = [str(atom_type) for atom_type in kw['atom_types']]
@@ -200,22 +233,23 @@ def calc(**kw):
     rad_type = kwargs['rad_type'] = str(kw['rad_type'])
     rad_scales = [float(rad_scale) for rad_scale in kw['rad_scales']]
     radii = [[float(radius) for radius in radiuses] for radiuses in kw['radii']]
-    excludes = [[str(ex) for ex in exclude] for exclude in kw['excludes']]
+    kwargs['excludes']= excludes = [[str(ex) for ex in exclude] for exclude in kw['excludes']]
     num_angles = [int(num) for num in kw['num_angles']]
     out = os.path.abspath(os.path.join(str(kw['output_folder']), str(kw['output_name'])))
-    logger = Logger(out=out, debug_level=debug_level)
+    logger = Logger(out=out, debug_level=debug_level, table=str(kw.get('table', False)))
     log = logger.log
     if debug_level:
+        print('debug_level', debug_level)
         print('generating icosphere...')
 #    atomtype = 'special1'
-    start = time.time()
-    sphere = ico.IcoSphere(sub, 1)
+    start0 = time.time()
+    sphere = ico.IcoSphere(sub, 1, hdf5_path=str(kw.get('hdf5_path', '../progdata')))
     end = time.time()
     verts = sphere.verts
     numverts = len(verts)
     edge_length = 1 / math.sin(2 * math.pi / 5) / 2 ** sub
     if debug_level:
-        print('icosphere done in {} s'.format(end - start))
+        print('icosphere done in {} s'.format(end - start0))
         print('egde length = {}'.format(edge_length))
         print('number of vertices: {}'.format(numverts))
 #    generating KD-tree:
@@ -224,22 +258,28 @@ def calc(**kw):
     end = time.time()
     if debug_level:
         print('KD-tree done in', end - start, 's\n')
+        print('sub', sub)
     start = time.time()
-    for file_name, atom_type, cent_nums, rad_scale, radiuses, excluded, num_angle in zip(
-      file_names, atom_types, centrum_nums, rad_scales, radii, excludes, num_angles):
+    if debug_level:
+        print('processing...')
+        print(file_names, atom_types, centrum_nums, rad_scales, radii, num_angles)
+    for file_name, atom_type, cent_nums, rad_scale, radiuses, num_angle in zip(
+      file_names, atom_types, centrum_nums, rad_scales, radii, num_angles):
         kwargs['file_name'] = file_name
         kwargs['atom_type'] = atom_type
-        kwargs['excludes'] = excluded
         kwargs['num_angle'] = num_angle
         log(tag='File Name', value=[file_name])
         log(tag='IcoSphere Subdivision', value=[sub])
+        if debug_level:
+            print('processing', file_name)
         for radius in radiuses:
             kwargs['radius'] = radius
             kwargs['rad_scale'] = rad_scale
+#            TODO: replace tags, with their key value of the `tags` dictionary of the `Logger`
             log(tag='Cut Radius', value=[radius])
             log(tag='Type of Atomic Radii', value=[rad_type])
             log(tag='Scale Factor of Atomic Radii', value=[rad_scale])
-            log(tag='Excluded Elements', value=excluded)
+            log(tag='Excluded Elements', value=excludes)
             for centrum_num in cent_nums:
                 kwargs['centrum_num'] = centrum_num
                 mm = MolMap(**kwargs)
@@ -251,7 +291,7 @@ def calc(**kw):
                 numhits = len(hits)
                 coverage = numhits / numverts
                 log(tag='Buried Volume', value=[coverage])
-                log(tag='Centrum', value=[mm.centrum[1::-1]])
+                log(tag='Centrum', value=mm.centrum[1::-1])
                 if coverage == 1.0:
                     log(tag='Atoms on the Inverse Cone', value=[np.NaN])
                     log(tag='Inverse Cone Angle', value=[0.])
@@ -285,8 +325,8 @@ def calc(**kw):
                     log(tag='Inverse Cone Angle', value=[half_app_deg])
     end = time.time()
     if debug_level:
-        print('All done in {} s'.format(end - start))
-    logger.close()
+        print('All done in {} s'.format(end - start0))
+    return logger.close()
 
 
 def main(**new_kwargs):
@@ -302,7 +342,7 @@ def main(**new_kwargs):
               'centrum_nums': [[5, ]] * 2,
               'fold': os.path.abspath('../demo_molecules'),
               # 'fold': os.path.abspath('D:\myworkspace\getMolMap\moldata\\20140816_gesub'),
-              'sub' : 7,
+              'sub' : 6,
               'rad_type' : 'covrad', # Chose from covrad, atmrad, vdwrad
               'rad_scales' : [1.17] * 2, # Scale factor of chosen rad_type
               'radii': [[0.,]] * 2,
@@ -310,10 +350,11 @@ def main(**new_kwargs):
               'num_angles': [2] * 2,
               'output_folder': '../results',
               'output_name': 'getmolmap_results',
+              'table': True,
               'debug_level': 1,}
 
     kwargs.update(new_kwargs)
-    calc(**kwargs)
+    return calc(**kwargs)
 
 if __name__ == '__main__':
     main()
