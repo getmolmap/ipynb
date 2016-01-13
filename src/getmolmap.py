@@ -11,7 +11,7 @@ Created on 2013.10.18.
 
 import time
 import math
-import os
+import sys, os
 import array
 from collections import defaultdict
 import numpy as np
@@ -22,7 +22,12 @@ import xlsxwriter
 import pandas as pd
 # from scipy.spatial import cKDTree
 # from scipy.spatial import distance as sp_dis
-from elements import ELEMENTS
+try:
+    from elements import ELEMENTS
+except ImportError:
+    if './progdata' not in sys.path:
+        sys.path.append('../progdata')
+    from elements import ELEMENTS
 import icosaio
 import icosphere as ico
 # import scipy.spatial as sp
@@ -58,6 +63,7 @@ class Logger():
         self.worksheet.set_column('A:A', 24)
         self.worksheet.set_column('B:D', 16)
         self.row = 0
+        self.df_row = 0
         tags = {'file_name': 'File Name',
                 'sub': 'IcoSphere Subdivision',
                 'radius': 'Cut Radius',
@@ -73,6 +79,7 @@ class Logger():
                                           tags['atom_scale']: 2,
                                           tags['coverage']: 3,
                                           tags['angle']: 1, })
+        self.tags_to_html = ('file_name', 'coverage', 'centrum', 'cone_atoms', 'angle')
 
     def log(self, **kw):
         tags = self.tags
@@ -87,30 +94,34 @@ class Logger():
             num_format = self.workbook.add_format({'num_format': xlsx_num_format,
                                                    'align': 'center', })
             cell_format = num_format
-        elif tag == tags['centrum']:  # tag == self.tags[7]
+        elif tag == 'centrum':
             value = [''.join([str(x) for x in value])]
-        if tag in (tags['file_name'], tags['coverage']):
+        if tag in ('file_name', 'coverage'):
             options = {'level': 0, 'collapsed': False}
-        if tag == tags['file_name']:
+        if tag == 'file_name':
             plain_format.set_top(2)
             cell_format.set_top(2)
 
         self.worksheet.set_row(self.row, None, plain_format, options)
-        self.worksheet.write(self.row, 0, tag, plain_format)
+        self.worksheet.write(self.row, 0, self.tags[tag], plain_format)
         self.worksheet.write_row(self.row, 1, value, cell_format)
+        self.row += 1
         if 'df' in dir(self):
-            row_values = ['', '', '']
-            for i in range(len(value)):
-                row_values[i] = value[i]
-            self.df.loc[self.row] = [tag] + row_values
+            if tag in self.tags_to_html:
+                row_values = ['', '', '']
+                for i in range(len(value)):
+                    row_values[i] = value[i]
+                self.df.loc[self.df_row] = [self.tags[tag]] + row_values
+                self.df_row += 1
 
         if self.debug_level:
-            print('{}:'.format(kw['tag']), *kw['value'])
-        self.row += 1
+            print('{} ({}):'.format(self.tags[tag], kw['tag']), *kw['value'])
+
 
     def close(self):
         self.workbook.close()
-        return self.df
+        return str(self.df.to_html(index=False, index_names=False, header=False))
+#        df.style.set_properties(color="white", align="right")
 
 
 class MolMap():
@@ -233,7 +244,7 @@ def calc(**kw):
     rad_type = kwargs['rad_type'] = str(kw['rad_type'])
     rad_scales = [float(rad_scale) for rad_scale in kw['rad_scales']]
     radii = [[float(radius) for radius in radiuses] for radiuses in kw['radii']]
-    kwargs['excludes']= excludes = [[str(ex) for ex in exclude] for exclude in kw['excludes']]
+    kwargs['excludes']= excludes = [str(element) for element in kw['excludes']]
     num_angles = [int(num) for num in kw['num_angles']]
     out = os.path.abspath(os.path.join(str(kw['output_folder']), str(kw['output_name'])))
     logger = Logger(out=out, debug_level=debug_level, table=str(kw.get('table', False)))
@@ -268,18 +279,18 @@ def calc(**kw):
         kwargs['file_name'] = file_name
         kwargs['atom_type'] = atom_type
         kwargs['num_angle'] = num_angle
-        log(tag='File Name', value=[file_name])
-        log(tag='IcoSphere Subdivision', value=[sub])
+        log(tag='file_name', value=[file_name])
+        log(tag='sub', value=[sub])
         if debug_level:
             print('processing', file_name)
         for radius in radiuses:
             kwargs['radius'] = radius
             kwargs['rad_scale'] = rad_scale
 #            TODO: replace tags, with their key value of the `tags` dictionary of the `Logger`
-            log(tag='Cut Radius', value=[radius])
-            log(tag='Type of Atomic Radii', value=[rad_type])
-            log(tag='Scale Factor of Atomic Radii', value=[rad_scale])
-            log(tag='Excluded Elements', value=excludes)
+            log(tag='radius', value=[radius])
+            log(tag='rad_type', value=[rad_type])
+            log(tag='atom_scale', value=[rad_scale])
+            log(tag='excludes', value=excludes)
             for centrum_num in cent_nums:
                 kwargs['centrum_num'] = centrum_num
                 mm = MolMap(**kwargs)
@@ -290,11 +301,11 @@ def calc(**kw):
                 hits = np.unique(np.array(hits, dtype=np.uint32))
                 numhits = len(hits)
                 coverage = numhits / numverts
-                log(tag='Buried Volume', value=[coverage])
-                log(tag='Centrum', value=mm.centrum[1::-1])
+                log(tag='coverage', value=[coverage])
+                log(tag='centrum', value=mm.centrum[1::-1])
                 if coverage == 1.0:
-                    log(tag='Atoms on the Inverse Cone', value=[np.NaN])
-                    log(tag='Inverse Cone Angle', value=[0.])
+                    log(tag='cone_atoms', value=[np.NaN])
+                    log(tag='angle', value=[0.])
                     continue
                 for a in range(num_angle):
                     if a > 0:
@@ -321,8 +332,8 @@ def calc(**kw):
                     except ValueError:
                         idxs = [['']]
                     # angle in degrees!!!
-                    log(tag='Atoms on the Inverse Cone', value=idxs)
-                    log(tag='Inverse Cone Angle', value=[half_app_deg])
+                    log(tag='cone_atoms', value=idxs)
+                    log(tag='angle', value=[half_app_deg])
     end = time.time()
     if debug_level:
         print('All done in {} s'.format(end - start0))
@@ -335,7 +346,6 @@ def main(**new_kwargs):
 #TODO: minimal angle of substrate/solvent molecule
 #TODO: xlsxwriter
 #TODO: error estimation, error propagation study
-    import os
 
     kwargs = {'file_names': ['iprc.xyz', 'iprc2.xyz'],
               'atom_types': ['Pt'] * 2,
@@ -346,7 +356,7 @@ def main(**new_kwargs):
               'rad_type' : 'covrad', # Chose from covrad, atmrad, vdwrad
               'rad_scales' : [1.17] * 2, # Scale factor of chosen rad_type
               'radii': [[0.,]] * 2,
-              'excludes' : [['H'], ] * 2,
+              'excludes' : ['H', ],
               'num_angles': [2] * 2,
               'output_folder': '../results',
               'output_name': 'getmolmap_results',

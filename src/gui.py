@@ -51,6 +51,7 @@ class SimpleDataModel(HasTraits):
     output_folder = Unicode('./results', sync=True)
     output_name = Unicode('getmolmap_results', sync=True)
     table = Bool(True, sync=True)
+    advanced_tab_visible = Bool(False, sync=True)
     debug_level = Int(0, sync=True)
 
     def get_values(self):
@@ -61,8 +62,6 @@ class SimpleDataModel(HasTraits):
         #TODO: not elegant:
         dont = "Don't exclude any elements"
         values['excludes'] = [e for e in values['excludes'] if e != dont]
-        if values['excludeH']:
-            values['excludes'] = list(set(values['excludes'] + ['H']))
         return values
 
 
@@ -104,6 +103,8 @@ class SimpleGui(Box):
     class handles creating all of the GUI controls and links. This ensures
     that the model itself remains embeddable and rem
     """
+    download_link = Unicode(sync=True)
+    results_table = Unicode(sync=True)
 
     def __init__(self, model=SimpleDataModel(), model_config=None, *args, **kwargs):
         self.model = model
@@ -113,11 +114,12 @@ class SimpleGui(Box):
 
         # Create a GUI
         # kwargs["orientation"] = 'vertical'
-        kwargs["children"] = [self.INOUT_panel(), self.settings_panel()]
+        kwargs["children"] = [self.INOUT_panel(), self.settings_panel(), self.output_panel()]
         #                    VBox([self.plot_panel(), self.slicing_panel(), self.unit_panel()]),])]
 
         super().__init__(*args, **kwargs)
         self._dom_classes += ("getMolMap row",)
+        self.tight_layout()
 
 
     def tight_layout(self):
@@ -171,13 +173,14 @@ class SimpleGui(Box):
         # Downloading results is not working yet. Instruct the user to use the dashboard.
         #TODO: show message to use the dashboard
         #TODO: implement download properly
+        download_link = '<a href="resource234.txt" download="license.txt" >  download the license </a>'
         savebutton = Button(color='#586e75', background_color='#eee8d5',
-                            description="Export Results", margin=0, padding=1)
+                            description='Download', margin=0, padding=1)
         self.model.savebutton = savebutton
         button_gap = Box(margin=11, background_color='blue')
         button_area = HBox([file_widget, button_gap, savebutton], margin=0)
         area = VBox([button_area, upload_area])
-        formats = HTML('Supported file extensions: .xyz, .pdb, .cif, and plenty \
+        formats = HTML(value='Supported file extensions: .xyz, .pdb, .cif, and plenty \
         <a href="http://openbabel.org/wiki/List_of_extensions" target="_blank"> more</a>.')
         return ControlPanel(title="Upload geometry:", children=[formats, area],
                             border_width=2, border_radius=4, margin=0, padding=0)
@@ -211,21 +214,31 @@ class SimpleGui(Box):
                                              atomradscale_slider_widget],
                                    margin=margin,)
 
-        excludeH_button = Checkbox(description='Exclude H',)
+        excludeH_button = Checkbox(description='Exclude H from every geometry:',)
         link((self.model, 'excludeH'), (excludeH_button, 'value'))
+        excludeH_button.on_trait_change(self.excludeH_changed)
 
         dont = "Don't exclude any elements"
+        self.dont = dont
         #TODO: Syncronize exclude_list_widget with excludeH button and define an event on the
         # model to filter out the `dont` text.
         # Alternatevily, separate this option into a checkbox and hide the exclude options
         # while the button is selected.
-        exclude_list_text = 'Exclude:'
+        exclude_list_text = 'Exclude elements from every geometry:'
         exclude_list_widget = SelectMultiple(options=[dont] + [e.symbol for e in ELEMENTS],
                                              selected_labels=[dont],
                                              color='Black',
                                              font_size=14,
                                              height=120)
         link((exclude_list_widget, 'value'), (self.model, 'excludes'))
+        # The dirty old SelectMultiple widget does not have an .on_trait_change method.
+        # So we create a new traitlet (excludes_notifier), which has an .on_trait_change method
+        # because it inherits HasTraits. We link the 'value' trait to excludes_notifier.excludes;
+        # and we bind the event handler to excludes_notifier.on_trait_change
+        self.excludes_notifier = ExcludesNotifier()
+        link((exclude_list_widget, 'value'), (self.excludes_notifier, 'excludes'))
+        self.excludes_notifier.on_trait_change(self.excludes_changed)
+
         exclude_list = VBox(children=[HTML(value=exclude_list_text), exclude_list_widget],
                             margin=margin)
 
@@ -235,7 +248,8 @@ class SimpleGui(Box):
                                        margin=margin)
         link((self.model, 'rad_type'), (atomrad_button, 'value'))
         runbutton = Button(description="Run calculation!",
-                           tooltip='Click here to calculate coverage and inverse cone angles!',
+                           tooltip='Click here to calculate Buried Volumes and\
+                           Inverse Cone Angles!',
                            margin=margin * 3,
                            border_color='#9acfea',
                            # border_radius=5,
@@ -256,16 +270,42 @@ class SimpleGui(Box):
         return ControlPanel(title="getMolMap Settings", children=[main_window, runbutton],
                             border_width=2, border_radius=4, margin=10, padding=0)
 
+    def excludeH_changed(self, *args, **kwargs):
+        if self.model.excludeH:
+            self.model.excludes = list(set(self.model.excludes) | {'H', })
+            self.model.excludes = list(set(self.model.excludes) - {self.dont, })
+        else:
+            self.model.excludes = list(set(self.model.excludes) - {'H', })
+            if len(self.model.excludes) > 1 and self.dont in self.model.excludes:
+                self.model.excludes = list(set(self.model.excludes) - {self.dont, })
+
+    def excludes_changed(self, *args, **kwargs):
+        if 'H' in self.model.excludes and not self.model.excludeH:
+            self.model.excludeH = True
+        elif 'H' not in self.model.excludes and self.model.excludeH:
+            self.model.excludeH = False
+
     def run_button_clicked(self, trait_name):
         kwargs = self.model.get_values()
-        getmolmap.calc(**kwargs)
-#        DataFrame.to_html(buf=None, columns=None, col_space=None, colSpace=None, header=True, index=True, na_rep='NaN', formatters=None, float_format=None, sparsify=None, index_names=True, justify=None, bold_rows=True, classes=None, escape=True, max_rows=None, max_cols=None, show_dimensions=False, notebook=False)
-#        df.style.set_properties(color="white", align="right")
+        html_table = getmolmap.calc(**kwargs)
+        self.download_link = 'Download <a href="/files/results/getmolmap_results.xlsx"\
+         target="_blank"> getmolmap_results.xlsx</a>.'
+        self.results_table = html_table
 
 
     def output_panel(self):
-        pass
+        download_link = HTML(value='')
+        link((self, 'download_link'), (download_link, 'value'))
+        results_table = HTML(value='')
+        link((self, 'results_table'), (results_table, 'value'))
+        content = VBox(children=[download_link, results_table])
+        return ControlPanel(title="Results:", children=[content],
+                            border_width=2, border_radius=4, margin=10, padding=0)
         """<div style="height:100px;width:200px;overflow:auto;border:8px solid yellowgreen;padding:2%">This </div>"""
+
+
+class ExcludesNotifier(HasTraits):
+    excludes = List(trait=Unicode, default_value=['H'], sync=True)
 
 
 class FileWidget(widgets.DOMWidget):
