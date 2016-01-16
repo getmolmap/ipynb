@@ -65,6 +65,9 @@ require(["nbextensions/widgets/widgets/js/widget", "nbextensions/widgets/widgets
         handle_file_change: function(evt) { 
             // Handle when the user has changed the file.
             
+            // Save context (or namespace or whatever this is)
+            var that = this;
+
             // Retrieve the FileList object
             var files = evt.target.files;
             var filenames = [];
