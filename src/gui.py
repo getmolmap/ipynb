@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+from collections import OrderedDict
 from ipywidgets import (Box,
                         Button,
                         Checkbox,
@@ -18,12 +19,14 @@ from ipywidgets import (Box,
                         Tab,
                         Text,
                         ToggleButtons,
-                        VBox,)
+                        VBox,
+                        jslink, )
 import ipywidgets as widgets
 from IPython import display
-from traitlets import HasTraits, link, Int, Float, Unicode, List, Bool
+from traitlets import Bool, Dict, Float, HasTraits, Int, link, List, Unicode
 from elements import ELEMENTS
 import getmolmap
+from icosaio import getxyz
 
 LAYOUT_HTML_1 = '<style> \
 .widget-area .getMolMap .panel-body{padding: 0;} \
@@ -35,9 +38,10 @@ LAYOUT_HTML_1 = '<style> \
 
 
 class SimpleDataModel(HasTraits):
-    file_names = List(trait=Unicode, default_value=['iprc.xyz', 'iprc2.xyz'], sync=True)
-    atom_types = List(trait=Unicode, default_value=['Pt', 'Pt'], sync=True)
-    centrum_nums = List(trait=List(trait=Int()), default_value=[[5], [5]], sync=True)
+    atom_counts = Dict(sync=True)
+    file_names = List(trait=Unicode, sync=True)  # default_value=['iprc.xyz', 'iprc2.xyz'],
+    atom_types = List(trait=Unicode, sync=True)  # default_value=['Pt', 'Pt'],
+    centrum_nums = List(trait=List(trait=Int()), sync=True)  # default_value=[[5], [5]],
     fold = Unicode('./demo_molecules', sync=True)
     sub = Int(6, sync=True)
     rad_type = Unicode('covrad', sync=True)
@@ -47,7 +51,7 @@ class SimpleDataModel(HasTraits):
     radius = Float(0.0, sync=True)
     excludeH = Bool(False, sync=True)
     excludes = List(trait=Unicode, default_value=['H'], sync=True)
-    num_angles = List(trait=Int, default_value=[2, 2], sync=True)
+    num_angles = Int(1, sync=True)
     output_folder = Unicode('./results', sync=True)
     output_name = Unicode('getmolmap_results', sync=True)
     table = Bool(True, sync=True)
@@ -62,6 +66,7 @@ class SimpleDataModel(HasTraits):
         #TODO: not elegant:
         dont = "Don't exclude any elements"
         values['excludes'] = [e for e in values['excludes'] if e != dont]
+        values['num_angles'] = [values['num_angles']] * len(values['atom_types'])
         return values
 
 
@@ -122,6 +127,7 @@ class SimpleGui(Box):
         self.tight_layout()
 
 
+
     def tight_layout(self):
         """ Tight layout for gui boxes/widgets """
         return display.HTML(LAYOUT_HTML_1)
@@ -131,34 +137,105 @@ class SimpleGui(Box):
         # loadbutton = Button(color='black', background_color='AliceBlue',
         #                     description="Upload Geometry", margin=0, padding=3)
         upload_area = VBox()
-        symbols = [e.symbol for e in ELEMENTS]
         file_widget = FileWidget()
         self.model.file_widget = file_widget  # This line is for debugging only.
 
+        def centrum_changed(name, old, new):
+            '''When the user selects another centrum atom type, change the options for the
+            atomnum_picker widget to the possible numbers'''
+            if old and new != old:
+                i = int(name.strip('_'))
+                fname = self.model.file_names[i]
+                options = self.model.atom_counts[fname][new]
+                atomnum_picker1 = upload_area.children[i].children[1]
+                atomnum_picker1.options = OrderedDict([('-', 0)] + [(str(i), i) for i in options])
+                self.model.atom_types[i] = new
+                values = atomnum_picker1.options.values()
+                atomnum_picker1.value = [v for v in values][1]
+
+        def atomnum_changed(name, old, new):
+            if new != old:
+                i = int(name.strip('_'))
+                for j in range(1,4):
+                    atomnum_pickerj = upload_area.children[i].children[j]
+                    self.model.centrum_nums[i][j - 1] = int(atomnum_pickerj.value)
+
         # Register an event to echo the filename when it has been changed.
         def file_loading():
-            file_names = file_widget.filenames
+            # file_names are uniqe, we ignore any duplicates
+            file_names = [fn for fn in file_widget.filenames if fn not in self.model.file_names]
+            old_len = len(self.model.file_names)
+            new_len = len(file_names)
+            self.model.file_names.extend(file_names)
+            self.model.atom_types.extend(['H' for i in range(new_len)])
+            self.model.centrum_nums.extend([[1, 1, 1] for i in range(new_len)])
             old_children = list(upload_area.children)
             new_children = []
-            for file_name in file_names:
-                element_picker = Dropdown(description=file_name, options=symbols,
-                                                value='H', color='Black', height=32,
-                                                width=32, font_size=14,)
-                atomnum_picker = SelectMultiple(options=[str(i + 1) for i in range(100)],
-                                                         value=['1'], color='Black', height=32,
-                                                         width=64, font_size=14,)
-                line = HBox([element_picker, atomnum_picker])
+            options = {'-': 0, }
+            for i, file_name in zip(range(old_len, new_len), file_names):
+                j = '_{}'.format(i)
+                element_picker = Dropdown(description=file_name, value='', options=[''],
+                                          color='Black', height=32, width=32, font_size=14,)
+                element_picker.add_traits(**{j: Unicode(sync=True)})
+                link((element_picker, 'value'), (element_picker, j))
+                element_picker.on_trait_change(centrum_changed, j)
+                atomnum_picker1 = Dropdown(options=options, value=0, color='Black',
+                                          height=32, font_size=14,)
+                atomnum_picker2 = Dropdown(options=options, value=0, color='Black',
+                                          height=32, font_size=14,)
+                atomnum_picker3 = Dropdown(options=options, value=0, color='Black',
+                                          height=32, font_size=14,)
+                link((atomnum_picker1, 'options'), (atomnum_picker2, 'options'))
+                link((atomnum_picker2, 'options'), (atomnum_picker3, 'options'))
+
+                atomnum_picker1.add_traits(**{j: Int(sync=True)})
+                atomnum_picker2.add_traits(**{j: Int(sync=True)})
+                atomnum_picker3.add_traits(**{j: Int(sync=True)})
+                link((atomnum_picker1, 'value'), (atomnum_picker1, j))
+                link((atomnum_picker2, 'value'), (atomnum_picker2, j))
+                link((atomnum_picker3, 'value'), (atomnum_picker3, j))
+                atomnum_picker1.on_trait_change(atomnum_changed, j)
+                atomnum_picker2.on_trait_change(atomnum_changed, j)
+                atomnum_picker3.on_trait_change(atomnum_changed, j)
+
+                line = HBox([element_picker, atomnum_picker1, atomnum_picker2, atomnum_picker3])
                 new_children.append(line)
             upload_area.children = old_children + new_children
             # print('Loading {} file(s)...'.format(file_widget.num_files), end='', flush=True)
         file_widget.on_trait_change(file_loading, 'filenames')
 
-        # Register an event to echo the filename and contents when a file
-        # has been uploaded.
+#        def file_loaded():
+#            file_name = file_widget.file_name
+#            print('loading', file_name)
+#            with open('./moldata/{}'.format(file_name), 'w') as f:
+#                f.write(file_widget.value)
+#        file_widget.on_trait_change(file_loaded, 'value')
+
+
         def file_loaded():
-            file_name = file_widget.file_name
-            with open('../moldata/{}'.format(file_name), 'w') as f:
+            '''Register an event to save contents when a file has been uploaded.'''
+            fname = file_widget.file_name
+            fpath = os.path.join('./moldata', fname)
+            with open(fpath, 'w') as f:
                 f.write(file_widget.value)
+            geom = getxyz(fpath)
+            atom_count = {}
+            heaviest = 1
+            for i, line in enumerate(geom):
+                anum = int(line[0])
+                heaviest = max(anum, heaviest)
+                symbol = ELEMENTS[anum].symbol
+                if symbol in atom_count.keys():
+                    atom_count[symbol].append(i + 1)
+                else:
+                    atom_count[symbol] = [i + 1]
+            self.model.atom_counts[fname] = atom_count
+            index = self.model.file_names.index(fname)
+            element_picker = upload_area.children[index].children[0]
+            element_picker.options = list(atom_count.keys())
+            element_picker.value = ELEMENTS[heaviest].symbol
+
+
         file_widget.on_trait_change(file_loaded, 'value')
 
         # Register an event to print an error message when a file could not
@@ -170,15 +247,8 @@ class SimpleGui(Box):
             print("Could not load some file contents.")
         file_widget.errors.register_callback(file_failed)
 
-        # Downloading results is not working yet. Instruct the user to use the dashboard.
-        #TODO: show message to use the dashboard
-        #TODO: implement download properly
-        download_link = '<a href="resource234.txt" download="license.txt" >  download the license </a>'
-        savebutton = Button(color='#586e75', background_color='#eee8d5',
-                            description='Download', margin=0, padding=1)
-        self.model.savebutton = savebutton
         button_gap = Box(margin=11, background_color='blue')
-        button_area = HBox([file_widget, button_gap, savebutton], margin=0)
+        button_area = HBox([file_widget, button_gap, ], margin=0)
         area = VBox([button_area, upload_area])
         formats = HTML(value='Supported file extensions: .xyz, .pdb, .cif, and plenty \
         <a href="http://openbabel.org/wiki/List_of_extensions" target="_blank"> more</a>.')
@@ -189,8 +259,14 @@ class SimpleGui(Box):
         # getMolMap calulation settings.  NOTE: should only be called once.
         margin = 2
 
+        num_angles_slider_text = "Number of Inverse Cone Angles to calculate:"
+        num_angles_slider_widget = IntSlider(value=1, min=1, max=5,)
+        num_angles_slider = VBox(children=[HTML(value=num_angles_slider_text),
+                                           num_angles_slider_widget],
+                                 margin=margin, width='100%')
+        link((self.model, 'num_angles'), (num_angles_slider_widget, 'value'))
         sub_slider_text = "Subdivision value of the icosphere for numerical calculation:"
-        sub_slider_widget = IntSlider(value=5, min=1, max=10,)
+        sub_slider_widget = IntSlider(value=5, min=1, max=9,)
         link((self.model, 'sub'), (sub_slider_widget, 'value'))
         sub_slider = VBox(children=[HTML(value=sub_slider_text), sub_slider_widget],
                           margin=margin, width='100%')
@@ -216,7 +292,7 @@ class SimpleGui(Box):
 
         excludeH_button = Checkbox(description='Exclude H from every geometry:',)
         link((self.model, 'excludeH'), (excludeH_button, 'value'))
-        excludeH_button.on_trait_change(self.excludeH_changed)
+        excludeH_button.on_trait_change(self.excludeH_changed, 'value')
 
         dont = "Don't exclude any elements"
         self.dont = dont
@@ -248,8 +324,8 @@ class SimpleGui(Box):
                                        margin=margin)
         link((self.model, 'rad_type'), (atomrad_button, 'value'))
         runbutton = Button(description="Run calculation!",
-                           tooltip='Click here to calculate Buried Volumes and\
-                           Inverse Cone Angles!',
+                           tooltip=
+                           'Click here to calculate Buried Volumes and Inverse Cone Angles!',
                            margin=margin * 3,
                            border_color='#9acfea',
                            # border_radius=5,
@@ -258,7 +334,8 @@ class SimpleGui(Box):
         runbutton.on_click(self.run_button_clicked)
 
         basic_tab = VBox(children=[atomrad_button, excludeH_button, ])
-        sliders = VBox(children=[atomradscale_slider, radius_slider, sub_slider])
+        sliders = VBox(children=[num_angles_slider, atomradscale_slider, radius_slider,
+                                 sub_slider])
         sliders.width = '100%'
         sliders.pack = 'center'
 
@@ -267,7 +344,7 @@ class SimpleGui(Box):
         main_window.set_title(0, 'Basic')
         main_window.set_title(1, 'Advanced')
 
-        return ControlPanel(title="getMolMap Settings", children=[main_window, runbutton],
+        return ControlPanel(title="getMolMap Settings:", children=[main_window, runbutton],
                             border_width=2, border_radius=4, margin=10, padding=0)
 
     def excludeH_changed(self, *args, **kwargs):

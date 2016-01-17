@@ -75,10 +75,10 @@ class Logger():
                 'cone_atoms': 'Atoms on the Inverse Cone',
                 'angle': 'Inverse Cone Angle',}
         self.tags = tags
-        self.decimals = defaultdict(int, {tags['radius']: 3,
-                                          tags['atom_scale']: 2,
-                                          tags['coverage']: 3,
-                                          tags['angle']: 1, })
+        self.decimals = defaultdict(int, {'radius': 3,
+                                          'atom_scale': 2,
+                                          'coverage': 3,
+                                          'angle': 1, })
         self.tags_to_html = ('file_name', 'coverage', 'centrum', 'cone_atoms', 'angle')
 
     def log(self, **kw):
@@ -110,16 +110,24 @@ class Logger():
             if tag in self.tags_to_html:
                 row_values = ['', '', '']
                 for i in range(len(value)):
-                    row_values[i] = value[i]
-                self.df.loc[self.df_row] = [self.tags[tag]] + row_values
+                    if decimals > 0:
+                        row_values[i] = round(value[i], decimals)
+                    else:
+                        row_values[i] = value[i]
+                self.df.loc[self.df_row] = [tags[tag]] + row_values
                 self.df_row += 1
 
         if self.debug_level:
-            print('{} ({}):'.format(self.tags[tag], kw['tag']), *kw['value'])
+            print('{} ({}):'.format(tags[tag], kw['tag']), *kw['value'])
 
 
     def close(self):
         self.workbook.close()
+#        def hover(hover_color="#ffff99"):
+#            return dict(selector="tr:hover",
+#                        props=[("background-color", "%s" % hover_color)])
+#
+#        styles = [hover()]
         return str(self.df.to_html(index=False, index_names=False, header=False))
 #        df.style.set_properties(color="white", align="right")
 
@@ -238,7 +246,7 @@ def calc(**kw):
     kwargs = {}
     file_names = [str(file_name) for file_name in kw['file_names']]
     atom_types = [str(atom_type) for atom_type in kw['atom_types']]
-    centrum_nums = [[int(num) for num in nums] for nums in kw['centrum_nums']]
+    centrum_nums = [list(set([int(num) for num in nums if int(num) != 0])) for nums in kw['centrum_nums']]
     kwargs['fold'] = os.path.abspath(str(kw['fold']))
     sub = kwargs['sub'] = int(kw['sub'])
     rad_type = kwargs['rad_type'] = str(kw['rad_type'])
