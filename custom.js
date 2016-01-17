@@ -82,14 +82,14 @@ require(["nbextensions/widgets/widgets/js/widget", "nbextensions/widgets/widgets
 
                 // Read the file's textual content and set value to those contents.
                 file_readers.push(new FileReader());
-                file_readers[i].onload = (function(theFile) {
+                file_readers[i].onload = (function(theFile, i) {
                     return function(e) {
-                        that.model.set('file_name', escape(theFile.name));
+                        that.model.set('file_name', theFile.name);
                         that.model.set('value', e.target.result);
                         that.touch();
-                        console.log("file loaded: " + theFile.name);
+                        console.log(i + " file loaded: " + theFile.name);
                     };
-                })(f);
+                })(f, i);
 
                 file_readers[i].readAsText(f);
             }
