@@ -2,6 +2,7 @@
 
 import os
 from collections import OrderedDict
+from time import sleep, time
 from ipywidgets import (Box,
                         Button,
                         Checkbox,
@@ -41,13 +42,13 @@ class SimpleDataModel(HasTraits):
     atom_counts = Dict(sync=True)
     file_names = List(trait=Unicode, sync=True)  # default_value=['iprc.xyz', 'iprc2.xyz'],
     atom_types = List(trait=Unicode, sync=True)  # default_value=['Pt', 'Pt'],
-    centrum_nums = List(trait=List(trait=Int()), sync=True)  # default_value=[[5], [5]],
+    centrum_nums = List(trait=List(trait=Int), sync=True)  # default_value=[[5], [5]],
     fold = Unicode('./demo_molecules', sync=True)
     sub = Int(6, sync=True)
     rad_type = Unicode('covrad', sync=True)
     rad_scale = Float(1.17, sync=True)
 #    rad_scales = List(trait=Float, default_value=[1.17, 1.17], sync=True)
-#    radii = List(trait=List(trait=Float()), default_value=[[0.], [0.]], sync=True)
+#    radii = List(trait=List(trait=Float), default_value=[[0.], [0.]], sync=True)
     radius = Float(0.0, sync=True)
     excludeH = Bool(False, sync=True)
     excludes = List(trait=Unicode, default_value=['H'], sync=True)
@@ -143,7 +144,9 @@ class SimpleGui(Box):
         def centrum_changed(name, old, new):
             '''When the user selects another centrum atom type, change the options for the
             atomnum_picker widget to the possible numbers'''
-            if old and new != old:
+            i = int(name.strip('_'))
+            print(self.model.file_names[i], 'old, new:', old, new, end=' ', flush=True)
+            if new != old:
                 i = int(name.strip('_'))
                 fname = self.model.file_names[i]
                 options = self.model.atom_counts[fname][new]
@@ -151,7 +154,8 @@ class SimpleGui(Box):
                 atomnum_picker1.options = OrderedDict([('-', 0)] + [(str(i), i) for i in options])
                 self.model.atom_types[i] = new
                 values = atomnum_picker1.options.values()
-                atomnum_picker1.value = [v for v in values][1]
+                value = [v for v in values][1]
+                atomnum_picker1.value = value
 
         def atomnum_changed(name, old, new):
             if new != old:
@@ -160,11 +164,53 @@ class SimpleGui(Box):
                     atomnum_pickerj = upload_area.children[i].children[j]
                     self.model.centrum_nums[i][j - 1] = int(atomnum_pickerj.value)
 
+        def file_loaded(name, new):
+            '''Register an event to save contents when a file has been uploaded.'''
+            i = int(name.split('_')[1])
+            fname = file_widget.filenames[i]
+            index = self.model.file_names.index(fname)
+            len_files = len(self.model.file_names)
+            fpath = os.path.join('./moldata', fname)
+            with open(fpath, 'w') as f:
+                f.write(new)
+            geom = getxyz(fpath)
+            atom_count = {}
+            heaviest = 1
+            for i, line in enumerate(geom):
+                anum = int(line[0])
+                heaviest = max(anum, heaviest)
+                symbol = ELEMENTS[anum].symbol
+                if symbol in atom_count.keys():
+                    atom_count[symbol].append(i + 1)
+                else:
+                    atom_count[symbol] = [i + 1]
+            self.model.atom_counts[fname] = atom_count
+            counter = 1000
+            while counter:
+                if len(upload_area.children) == len_files:
+                    element_picker = upload_area.children[index].children[0]
+                    element_picker.options = list(atom_count.keys())
+                    element_picker.value = ELEMENTS[heaviest].symbol
+                    return None
+                else:
+                    counter -= 1
+                    sleep(0.005)
+            print('fileLoadError:', fname, flush=True)
+
         # Register an event to echo the filename when it has been changed.
-        def file_loading():
+        def file_loading(name, old, new):
+            '''Update self.model when user requests a list of files to be uploaded'''
+
+
+            traits = [('value_{}'.format(i), Unicode(sync=True)) for i in range(len(new))]
+            file_widget.add_traits(**dict(traits))
+            for i in range(len(new)):
+                file_widget.on_trait_change(file_loaded, 'value_{}'.format(i))
+
             # file_names are uniqe, we ignore any duplicates
-            file_names = [fn for fn in file_widget.filenames if fn not in self.model.file_names]
-            old_len = len(self.model.file_names)
+            old_fnames = self.model.file_names
+            file_names = [fn for fn in new if fn not in old_fnames]
+            old_len = len(old_fnames)
             new_len = len(file_names)
             self.model.file_names.extend(file_names)
             self.model.atom_types.extend(['H' for i in range(new_len)])
@@ -203,40 +249,10 @@ class SimpleGui(Box):
             upload_area.children = old_children + new_children
             # print('Loading {} file(s)...'.format(file_widget.num_files), end='', flush=True)
         file_widget.on_trait_change(file_loading, 'filenames')
-
-#        def file_loaded():
-#            file_name = file_widget.file_name
-#            print('loading', file_name)
-#            with open('./moldata/{}'.format(file_name), 'w') as f:
-#                f.write(file_widget.value)
-#        file_widget.on_trait_change(file_loaded, 'value')
+#        self.model.file_widget = file_widget
 
 
-        def file_loaded():
-            '''Register an event to save contents when a file has been uploaded.'''
-            fname = file_widget.file_name
-            fpath = os.path.join('./moldata', fname)
-            with open(fpath, 'w') as f:
-                f.write(file_widget.value)
-            geom = getxyz(fpath)
-            atom_count = {}
-            heaviest = 1
-            for i, line in enumerate(geom):
-                anum = int(line[0])
-                heaviest = max(anum, heaviest)
-                symbol = ELEMENTS[anum].symbol
-                if symbol in atom_count.keys():
-                    atom_count[symbol].append(i + 1)
-                else:
-                    atom_count[symbol] = [i + 1]
-            self.model.atom_counts[fname] = atom_count
-            index = self.model.file_names.index(fname)
-            element_picker = upload_area.children[index].children[0]
-            element_picker.options = list(atom_count.keys())
-            element_picker.value = ELEMENTS[heaviest].symbol
-
-
-        file_widget.on_trait_change(file_loaded, 'value')
+#            file_widget.traits(name) = ''
 
         # Register an event to print an error message when a file could not
         # be opened.  Since the error messages are not handled through
@@ -387,9 +403,10 @@ class ExcludesNotifier(HasTraits):
 
 class FileWidget(widgets.DOMWidget):
     _view_name = Unicode('FilePickerView', sync=True)
-    value = Unicode(sync=True)
-    file_name = Unicode(sync=True)
+#    value = Unicode(sync=True)
+#    file_name = Unicode(sync=True)
     filenames = List([], sync=True)
+#    values = List(trait=Unicode, sync=True)
 
     def __init__(self, **kwargs):
         """Constructor"""

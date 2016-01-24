@@ -52,7 +52,7 @@ require(["nbextensions/widgets/widgets/js/widget", "nbextensions/widgets/widgets
 
     var FilePickerView = widget.DOMWidgetView.extend({
         render: function(){
-            // Render the view.
+            // Render the view using HTML5 multiple file input support.
             this.setElement($('<input class="fileinput" multiple="multiple" name="datafile"  />')
                 .attr('type', 'file'));
         },
@@ -80,14 +80,13 @@ require(["nbextensions/widgets/widgets/js/widget", "nbextensions/widgets/widgets
                 console.log("Size: " + files[i].size + " bytes");
                 filenames.push(files[i].name);
 
-                // Read the file's textual content and set value to those contents.
+                // Read the file's textual content and set value_i to those contents.
                 file_readers.push(new FileReader());
                 file_readers[i].onload = (function(theFile, i) {
                     return function(e) {
-                        that.model.set('file_name', theFile.name);
-                        that.model.set('value', e.target.result);
+                        that.model.set('value_' + i, e.target.result);
                         that.touch();
-                        console.log(i + " file loaded: " + theFile.name);
+                        console.log("file_" + i + " loaded: " + theFile.name);
                     };
                 })(f, i);
 
