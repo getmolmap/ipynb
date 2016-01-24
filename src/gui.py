@@ -43,7 +43,7 @@ class SimpleDataModel(HasTraits):
     file_names = List(trait=Unicode, sync=True)  # default_value=['iprc.xyz', 'iprc2.xyz'],
     atom_types = List(trait=Unicode, sync=True)  # default_value=['Pt', 'Pt'],
     centrum_nums = List(trait=List(trait=Int), sync=True)  # default_value=[[5], [5]],
-    fold = Unicode('./demo_molecules', sync=True)
+    fold = Unicode('./moldata', sync=True)
     sub = Int(6, sync=True)
     rad_type = Unicode('covrad', sync=True)
     rad_scale = Float(1.17, sync=True)
