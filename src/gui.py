@@ -145,7 +145,7 @@ class SimpleGui(Box):
             '''When the user selects another centrum atom type, change the options for the
             atomnum_picker widget to the possible numbers'''
             i = int(name.strip('_'))
-            print(self.model.file_names[i], 'old, new:', old, new, end=' ', flush=True)
+#            print(self.model.file_names[i], 'old, new:', old, new, end=' ', flush=True)
             if new != old:
                 i = int(name.strip('_'))
                 fname = self.model.file_names[i]
