@@ -381,8 +381,12 @@ class SimpleGui(Box):
     def run_button_clicked(self, trait_name):
         kwargs = self.model.get_values()
         html_table = getmolmap.calc(**kwargs)
-        self.download_link = 'Download <a href="/files/results/getmolmap_results.xlsx"\
-         target="_blank"> getmolmap_results.xlsx</a>.'
+        self.download_link = '''
+        <div class="formbutton">
+            <form action ="results/getmolmap_results.xlsx" method="get">
+                <button type="submit">Download Excel File</button>
+            </form>
+        </div>'''
         self.results_table = html_table
 
 
