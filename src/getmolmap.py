@@ -53,7 +53,10 @@ class Logger():
     def __init__(self, **kw):
         self.debug_level = kw.get('debug_level', 0)
         if kw.get('table', False):
-            self.df = pd.DataFrame(columns=('Description', '1', '2', '3'))
+            self.df_column_names = ('Description', '1', )
+            self.df = pd.DataFrame(columns=self.df_column_names)
+            self.df_row = 0
+            self.tags_to_html = ('file_name', 'coverage', 'centrum', 'angle')
         else:
             self.df = False
         out = kw.get('out', '../result/getmolmap_results') + '.xlsx'
@@ -63,7 +66,6 @@ class Logger():
         self.worksheet.set_column('A:A', 24)
         self.worksheet.set_column('B:D', 16)
         self.row = 0
-        self.df_row = 0
         tags = {'file_name': 'File Name',
                 'sub': 'IcoSphere Subdivision',
                 'radius': 'Cut Radius',
@@ -79,7 +81,7 @@ class Logger():
                                           'atom_scale': 2,
                                           'coverage': 3,
                                           'angle': 1, })
-        self.tags_to_html = ('file_name', 'coverage', 'centrum', 'cone_atoms', 'angle')
+
 
     def log(self, **kw):
         tags = self.tags
@@ -108,10 +110,11 @@ class Logger():
         self.row += 1
         if 'df' in dir(self):
             if tag in self.tags_to_html:
-                row_values = ['', '', '']
+                row_values = [''] * (len(self.df_column_names) - 1)
                 for i in range(len(value)):
                     if decimals > 0:
-                        row_values[i] = round(value[i], decimals)
+                        row_values[i] = '{:0.{}f}'.format(value[i], decimals)
+#                        row_values[i] = round(value[i], decimals)
                     else:
                         row_values[i] = value[i]
                 self.df.loc[self.df_row] = [tags[tag]] + row_values
@@ -309,11 +312,11 @@ def calc(**kw):
                 hits = np.unique(np.array(hits, dtype=np.uint32))
                 numhits = len(hits)
                 coverage = numhits / numverts
-                log(tag='coverage', value=[coverage])
                 log(tag='centrum', value=mm.centrum[1::-1])
+                log(tag='coverage', value=[coverage])
                 if coverage == 1.0:
-                    log(tag='cone_atoms', value=[np.NaN])
                     log(tag='angle', value=[0.])
+                    log(tag='cone_atoms', value=[np.NaN])
                     continue
                 for a in range(num_angle):
                     if a > 0:
@@ -340,8 +343,8 @@ def calc(**kw):
                     except ValueError:
                         idxs = [['']]
                     # angle in degrees!!!
-                    log(tag='cone_atoms', value=idxs)
                     log(tag='angle', value=[half_app_deg])
+                    log(tag='cone_atoms', value=idxs)
     end = time.time()
     if debug_level:
         print('All done in {} s'.format(end - start0))
