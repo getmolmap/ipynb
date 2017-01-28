@@ -30,27 +30,26 @@ from elements import ELEMENTS
 import getmolmap
 from icosaio import getxyz
 
-LAYOUT_HTML_1 = ''
-# LAYOUT_HTML_1 = '<style> \
-# .widget-area .getMolMap .panel-body{padding: 0;} \
-# .widget-area .getMolMap .widget-numeric-text{width: 2.5em;} \
-# .widget-area .getMolMap .widget-box.start{margin-left: 0;} \
-# .widget-area .getMolMap .widget-hslider{width: 20em;} \
-# .widget-area .getMolMap .widget-text{width: 10em;} \
-# </style>'
+LAYOUT_HTML_1 = '<style> \
+.widget-area .getMolMap .panel-body{padding: 0;} \
+.widget-area .getMolMap .widget-numeric-text{width: 2.5em;} \
+.widget-area .getMolMap .widget-box.start{margin-left: 0;} \
+.widget-area .getMolMap .widget-hslider{width: 20em;} \
+.widget-area .getMolMap .widget-text{width: 10em;} \
+</style>'
 
-text = ''' {}'''
-# <div style="background-color: white;
-#             padding-left: 0px;
-#             padding-top: 5px;
-#             padding-right: 0px;
-#             color: black;
-#             font-size: large;
-#             min-height: 22px;
-#             text-align: left;">
-# {}
-# </div>
-# '''
+text = '''
+<div style="background-color: white;
+            padding-left: 0px;
+            padding-top: 5px;
+            padding-right: 0px;
+            color: black;
+            font-size: large;
+            min-height: 22px;
+            text-align: left;">
+{}
+</div>
+'''
 
 
 class SimpleDataModel(HasTraits):
