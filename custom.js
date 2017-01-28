@@ -48,124 +48,75 @@
  * @static
  */
 
-require(["nbextensions/widgets/widgets/js/widget", "nbextensions/widgets/widgets/js/manager"], function(widget, manager){
+ requirejs.undef('filepicker');
 
-    var FilePickerView = widget.DOMWidgetView.extend({
-        render: function(){
-            // Render the view using HTML5 multiple file input support.
-            this.setElement($('<input class="fileinput" multiple="multiple" name="datafile"  />')
-                .attr('type', 'file'));
-        },
-        
-        events: {
-            // List of events and their handlers.
-            'change': 'handle_file_change',
-        },
-       
-        handle_file_change: function(evt) { 
-            // Handle when the user has changed the file.
-            
-            // Save context (or namespace or whatever this is)
-            var that = this;
+ define('filepicker', ["jupyter-js-widgets"], function(widgets) {
 
-            // Retrieve the FileList object
-            var files = evt.target.files;
-            var filenames = [];
-            var file_readers = [];
-            console.log("Reading files:");
+     var FilePickerView = widgets.DOMWidgetView.extend({
+         render: function(){
+             // Render the view using HTML5 multiple file input support.
+             this.setElement($('<input class="fileinput" multiple="multiple" name="datafile"  />')
+                 .attr('type', 'file'));
+         },
 
-            for (var i = 0, f; f = files[i]; i++) {
-                console.log("Filename: " + files[i].name);
-                console.log("Type: " + files[i].type);
-                console.log("Size: " + files[i].size + " bytes");
-                filenames.push(files[i].name);
+         events: {
+             // List of events and their handlers.
+             'change': 'handle_file_change',
+         },
 
-                // Read the file's textual content and set value_i to those contents.
-                file_readers.push(new FileReader());
-                file_readers[i].onload = (function(theFile, i) {
-                    return function(e) {
-                        that.model.set('value_' + i, e.target.result);
-                        that.touch();
-                        console.log("file_" + i + " loaded: " + theFile.name);
-                    };
-                })(f, i);
+         handle_file_change: function(evt) {
+             // Handle when the user has changed the file.
 
-                file_readers[i].readAsText(f);
-            }
+             // Save context (or namespace or whatever this is)
+             var that = this;
 
-            // Set the filenames of the files.
-            this.model.set('filenames', filenames);
-            this.touch();
-        },
-    });
-        
-    // Register the FilePickerView with the widget manager.
-    manager.WidgetManager.register_widget_view('FilePickerView', FilePickerView);
-});
+             // Retrieve the FileList object
+             var files = evt.originalEvent.target.files;
+             var filenames = [];
+             var file_readers = [];
+             console.log("Reading files:");
 
-$([IPython.events]).on('app_initialized.NotebookApp', function() {
-    // Add the shortcut
+             for (var i = 0; i < files.length; i++) {
+                 var file = files[i];
+                 console.log("Filename: " + file.name);
+                 console.log("Type: " + file.type);
+                 console.log("Size: " + file.size + " bytes");
+                 filenames.push(file.name);
 
-    IPython.keyboard_manager.command_shortcuts.add_shortcut('ctrl-x', {
-        help: 'Clear all output', // This text will show up on the
-        handler: function(event) { //  help page (CTRL-M h or ESC h)
-            IPython.notebook.clear_all_output(); // Function that gets invoked and
-            return false; //  triggers a notebook command
-        }
-    });
+                 // Read the file's textual content and set value_i to those contents.
+                 file_readers.push(new FileReader());
+                 file_readers[i].onload = (function(file, i) {
+                     return function(e) {
+                         that.model.set('value_' + i, e.target.result);
+                         that.touch();
+                         console.log("file_" + i + " loaded: " + file.name);
+                     };
+                 })(file, i);
 
-    IPython.keyboard_manager.command_shortcuts.add_shortcut('ctrl-r', {
+                 file_readers[i].readAsText(file);
+             }
 
-        help: 'Run all above including this cell', // This text will show up on the
-        handler: function(event) { //  help page (CTRL-M h or ESC h)
-            IPython.notebook.execute_cells_above();
-            IPython.notebook.select_next();
-            IPython.notebook.execute_cell();
-            return false; //  triggers a notebook command
-        }
-    });
+             // Set the filenames of the files.
+             this.model.set('filenames', filenames);
+             this.touch();
+         },
+     });
 
-    IPython.keyboard_manager.edit_shortcuts.add_shortcut('ctrl-r', {
+     // Register the FilePickerView with the widget manager.
+     return {
+         FilePickerView: FilePickerView
+     };
+ });
 
-        help: 'Run all above including this cell', // This text will show up on the
-        handler: function(event) { //  help page (CTRL-M h or ESC h)
-            IPython.notebook.execute_cells_above();
-            IPython.notebook.select_next();
-            IPython.notebook.execute_cell();
-            return false; //  triggers a notebook command
-        }
-    });
-
-    IPython.keyboard_manager.edit_shortcuts.add_shortcut('cmd-enter', {
-
-        help: 'Run current cell', // This text will show up on the
-        handler: function(event) { //  help page (CTRL-M h or ESC h)
-            IPython.notebook.execute_cell();
-            return false; //  triggers a notebook command
-        }
-    });
-
-    IPython.keyboard_manager.command_shortcuts.add_shortcut('cmd-enter', {
-
-        help: 'Run current cell', // This text will show up on the
-        handler: function(event) { //  help page (CTRL-M h or ESC h)
-            IPython.notebook.execute_cell();
-            return false; //  triggers a notebook command
-        }
-    });
-    // A small hint so we can see through firebug that our custom code executed
-    console.log("Customtcut(s) loaded");
-});
-
-define([
-        'base/js/namespace',
-        'base/js/events'
-    ],
-    function(IPython, events) {
-        events.on("app_initialized.NotebookApp",
-            function() {
-                IPython.Cell.options_default.cm_config.lineNumbers = true;
-            }
-        );
-    }
-);
+// define([
+//         'base/js/namespace',
+//         'base/js/events'
+//     ],
+//     function(IPython, events) {
+//         events.on("app_initialized.NotebookApp",
+//             function() {
+//                 IPython.Cell.options_default.cm_config.lineNumbers = true;
+//             }
+//         );
+//     }
+// );

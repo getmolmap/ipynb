@@ -8,9 +8,9 @@ html, body {
   overflow-y: hidden
 }
 
-div#header {
+/*div#header {
   background-color: #fdf6e3;
-}
+}*/
 
 div#site {
   margin:0;
@@ -25,19 +25,19 @@ div#site {
 div#notebook-container {
     padding-left: 5px;
     width: 1070px;
-    background-color: #fdf6e3;
+    /*background-color: #fdf6e3;*/
 }
 
-div.navbar-collapse {
+/*div.navbar-collapse {
     background-color: #fdf6e3;
-}
+}*/
 
 div#notebook {
     border-top: none;
 }
 
 div.input {
-    width: 135ex;
+    width: 131ex;
 }
 
 div.input_area {
@@ -46,7 +46,7 @@ div.input_area {
 
 div.output_subarea {
   /*margin-left:40px;*/
-    max-width: 123ex;
+    max-width: 131ex;
 }
 
 div.output_area pre {
@@ -65,9 +65,9 @@ div.text_cell_render {
     line-height: 145%;
 }
 
-.rendered_html pre, .rendered_html code {
+/*.rendered_html pre, .rendered_html code {
   background-color: #E6E6E6;
-}
+}*/
 
 .CodeMirror {
     font-size: 15px;
