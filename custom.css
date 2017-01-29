@@ -56,6 +56,11 @@ div.output_area pre {
   word-break:normal !important;
 }
 
+div.widget-subarea {
+  /*margin-left:40px;*/
+    max-width: 115ex;
+}
+
 div.text_cell {
     width: 135ex;
 }
