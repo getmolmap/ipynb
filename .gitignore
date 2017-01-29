@@ -3,7 +3,6 @@
 .ipynb_checkpoints/
 results/*
 moldata/*
-progdata/*.h5
 
 #################
 ## Eclipse
