@@ -3,6 +3,10 @@
 import os
 from collections import OrderedDict
 from time import sleep, time
+import numpy as np
+import pybel as pb
+from pybel import ob
+import imolecule
 from ipywidgets import (Box,
                         Button,
                         Checkbox,
@@ -31,12 +35,12 @@ import getmolmap
 from icosaio import getxyz
 
 LAYOUT_HTML_1 = '<style> \
-.widget-area .getMolMap .panel-body{padding: 0;} </style>'  # \
-# .widget-area .getMolMap .widget-numeric-text{width: 2.5em;} \
-# .widget-area .getMolMap .widget-box.start{margin-left: 0;} \
-# .widget-area .getMolMap .widget-hslider{width: 20em;} \
-# .widget-area .getMolMap .widget-text{width: 10em;} \
-# </style>'
+.widget-area .getMolMap .panel-body{padding: 0;} \
+.widget-area .getMolMap .widget-numeric-text{width: 2.5em;} \
+.widget-area .getMolMap .widget-box.start{margin-left: 0;} \
+.widget-area .getMolMap .widget-hslider{width: 20em;} \
+.widget-area .getMolMap .widget-text{width: 10em;} \
+</style>'
 
 text = '''
 <div style="background-color: white;
@@ -67,10 +71,13 @@ class SimpleDataModel(HasTraits):
     excludeH = Bool(False, ).tag(sync=True)
     excludes = List(trait=Unicode, default_value=['H'], ).tag(sync=True)
     num_angles = Int(1, ).tag(sync=True)
+    small_mols_path = Unicode('./demo_molecules/small_molecules.xyz', ).tag(sync=True)
     output_folder = Unicode('./results', ).tag(sync=True)
     output_name = Unicode('getmolmap_results', ).tag(sync=True)
     table = Bool(True, ).tag(sync=True)
     advanced_tab_visible = Bool(False, ).tag(sync=True)
+    small_mols = List(trait=Unicode).tag(sync=True)
+    molview_html = HTML(' ')
     debug_level = Int(0, ).tag(sync=True)
 
     def get_values(self):
@@ -134,8 +141,8 @@ class SimpleGui(Box):
 
         # Create a GUI
         # kwargs["orientation"] = 'vertical'
-        kwargs["children"] = [self.INOUT_panel(), self.settings_panel(), self.output_panel(),
-                              self.small_molecules_panel()]
+        kwargs["children"] = [self.INOUT_panel(), self.settings_panel(), ]
+                            #   self.output_panel(), self.small_molecules_panel()]
         #                    VBox([self.plot_panel(), self.slicing_panel(), self.unit_panel()]),])]
 
         super().__init__(*args, **kwargs)
@@ -341,9 +348,8 @@ class SimpleGui(Box):
         exclude_list_text = 'Exclude elements from every geometry:'
         exclude_list_widget = SelectMultiple(options=[dont] + [e.symbol for e in ELEMENTS],
                                              selected_labels=[dont],
-                                             color='Black',
-                                             font_size=14,
-                                             height=120)
+                                             layout=Layout(color='Black', font_size=14,
+                                                           height=120))
         link((exclude_list_widget, 'value'), (self.model, 'excludes'))
         # The dirty old SelectMultiple widget does not have an .observe method.
         # So we create a new traitlet (excludes_notifier), which has an .observe method
@@ -401,6 +407,7 @@ class SimpleGui(Box):
             self.model.excludeH = False
 
     def run_button_clicked(self, trait_name):
+        self.children = tuple(list(self.children) + [self.output_panel()])
         kwargs = self.model.get_values()
         if not os.path.exists(kwargs['output_folder']):
             os.makedirs(kwargs['output_folder'])
@@ -412,6 +419,7 @@ class SimpleGui(Box):
             </form>
         </div>'''
         self.results_table = html_table
+        self.children = tuple(list(self.children) + [self.small_molecules_panel()])
 
     def output_panel(self):
         download_link = HTML(value='')
@@ -425,14 +433,120 @@ class SimpleGui(Box):
         solid yellowgreen;padding:2%">This </div>"""
 
     def small_molecules_panel(self):
+        box_layout = Layout(display='flex',
+                            flex_flow='column',
+                            align_content='stretch',
+                            width='30%')
         file_widget = FileWidget()
+        selection_text = HTML(text.format('Select small molecules:'))
+        fpath = self.model.small_mols_path
+        mols = self.read_molecules(fpath)
+        options = [str(mol.GetTitle()) for mol in mols]
+        select_mol = RadioButtons(options=options, layout=box_layout)
+        link((select_mol, 'options'), (self.model, 'small_mols'))
+
+        def mol_small_changed(change):
+            bigmols = [k for k in self.model.atom_counts.keys()]
+            mol_big_path = os.path.join('./demo_molecules', bigmols[0])
+            mol_big = self.read_molecules(mol_big_path, single=True)
+            # mol_small = mols[options.index(change['new'])]
+            mol_small = pb.Molecule(mols[options.index(change['new'])])
+            coords = self.getcoords(mol_small.OBMol)
+            coords[:, 0] += 10.0
+            self.setcoords(mol_small.OBMol, coords)
+            i = self.getheaviest(mol_big)
+            j = self.getheaviest(mol_small.OBMol)
+            n = mol_big.NumAtoms()
+            mol_big.BeginModify()
+            mol_big += mol_small.OBMol
+            mol_big.EndModify()
+            mol_big.AddBond(i + 1, n + j + 1, 1)
+            pff = ob.OBForceField_FindType("uff")
+            if not pff:
+                print("Error: force field not found")
+            if not pff.Setup(mol_big):  # Make sure setup works OK
+                print("Error: Cannot set up force field!!!")
+            constraints = ob.OBFFConstraints()
+            for atom in ob.OBMolAtomIter(mol_big):
+                atom_id = atom.GetIndex() + 1
+            #     if atom.GetType() not in ('Ge', 'F'):
+                if atom_id <= n:
+                    constraints.AddAtomConstraint(atom_id)
+                else:
+                    # print('Unfreezing atom:', atom.GetType())
+                    pass
+                pff.SetConstraints(constraints)
+            # pff.SteepestDescentInitialize()
+            pff.SteepestDescent(2000)
+            pff.GetCoordinates(mol_big)
+            mol_big_pb = pb.Molecule(mol_big)
+            self.model.molview_html.value = imolecule.draw(mol_big_pb, format='pybel', size=(400, 300),
+                                               drawing_type='ball and stick',
+                                               camera_type='perspective', shader='lambert',
+                                               display_html=False)
+        select_mol.observe(mol_small_changed, 'value')
+
+        select_area = VBox(children=[selection_text, select_mol])
         button_gap = Box(margin=11)
         button_description = HTML(text.format('Upload more small molecules:'), layout=Layout(margin='4'))
         button_area = HBox(children=[button_description, file_widget, button_gap, ], layout=Layout(margin='8'))
         # button_area = HBox([file_widget, ], )
         # area = VBox([button_area, upload_area])
-        return ControlPanel(title="Dock Small Molecules:", children=[button_area],
-                            border_width=2, border_radius=4, margin=10, padding=0)
+        return ControlPanel(title="Dock Small Molecules:", children=[button_area, button_gap,
+                                                                     select_area,
+                                                                     self.model.molview_html],
+                            layout=Layout(border_width=2, border_radius=4, margin=10, padding=0))
+
+    def read_molecules(self, filepath, single=False):
+        in_format = filepath.strip().split('.')[-1]
+        obconversion = ob.OBConversion()
+        obconversion.SetInFormat(in_format)
+        obmol = ob.OBMol()
+
+        molecules = []
+
+        notatend = obconversion.ReadFile(obmol, filepath)
+        while notatend:
+            molecules.append(obmol)
+            obmol = ob.OBMol()
+            notatend = obconversion.Read(obmol)
+
+        if single:
+            assert(len(molecules) == 1)
+            return molecules[0]
+        else:
+            return molecules
+
+    def vector3tonumpy(self, vector3):
+        return np.array([vector3.GetX(), vector3.GetY(), vector3.GetZ()])
+
+    def numpytovector3(self, nparray):
+        return ob.vector3(float(nparray[0]), float(nparray[1]), float(nparray[2]))
+
+    def getcoords(self, obmol):
+        coords = []
+        for atom in ob.OBMolAtomIter(obmol):
+            coords.append(self.vector3tonumpy(atom.GetVector()))
+        return np.array(coords)
+
+    def setcoords(self, obmol, numpy_coords):
+        coords = numpy_coords
+        for atom, coord in zip(ob.OBMolAtomIter(obmol), coords):
+            atom.SetVector(self.numpytovector3(coord))
+
+    def getheaviest(self, obmol):
+        heaviest = 1
+        heaviest_pos = 0
+        for atom in ob.OBMolAtomIter(obmol):
+            anum = atom.GetAtomicNum()
+            if anum > heaviest:
+                heaviest = anum
+                heaviest_pos = atom.GetIndex()
+        return heaviest_pos
+
+    def mol_small_changed(self):
+        pass
+
 
 class ExcludesNotifier(HasTraits):
     excludes = List(trait=Unicode, default_value=['H'], ).tag(sync=True)
