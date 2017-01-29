@@ -134,7 +134,8 @@ class SimpleGui(Box):
 
         # Create a GUI
         # kwargs["orientation"] = 'vertical'
-        kwargs["children"] = [self.INOUT_panel(), self.settings_panel(), self.output_panel()]
+        kwargs["children"] = [self.INOUT_panel(), self.settings_panel(), self.output_panel(),
+                              self.small_molecules_panel()]
         #                    VBox([self.plot_panel(), self.slicing_panel(), self.unit_panel()]),])]
 
         super().__init__(*args, **kwargs)
@@ -423,6 +424,15 @@ class SimpleGui(Box):
         """<div style="height:100px;width:200px;overflow:auto;border:8px
         solid yellowgreen;padding:2%">This </div>"""
 
+    def small_molecules_panel(self):
+        file_widget = FileWidget()
+        button_gap = Box(margin=11)
+        button_description = HTML(text.format('Upload more small molecules:'), layout=Layout(margin='4'))
+        button_area = HBox(children=[button_description, file_widget, button_gap, ], layout=Layout(margin='8'))
+        # button_area = HBox([file_widget, ], )
+        # area = VBox([button_area, upload_area])
+        return ControlPanel(title="Dock Small Molecules:", children=[button_area],
+                            border_width=2, border_radius=4, margin=10, padding=0)
 
 class ExcludesNotifier(HasTraits):
     excludes = List(trait=Unicode, default_value=['H'], ).tag(sync=True)
