@@ -31,12 +31,12 @@ import getmolmap
 from icosaio import getxyz
 
 LAYOUT_HTML_1 = '<style> \
-.widget-area .getMolMap .panel-body{padding: 0;} \
-.widget-area .getMolMap .widget-numeric-text{width: 2.5em;} \
-.widget-area .getMolMap .widget-box.start{margin-left: 0;} \
-.widget-area .getMolMap .widget-hslider{width: 20em;} \
-.widget-area .getMolMap .widget-text{width: 10em;} \
-</style>'
+.widget-area .getMolMap .panel-body{padding: 0;} </style>'  # \
+# .widget-area .getMolMap .widget-numeric-text{width: 2.5em;} \
+# .widget-area .getMolMap .widget-box.start{margin-left: 0;} \
+# .widget-area .getMolMap .widget-hslider{width: 20em;} \
+# .widget-area .getMolMap .widget-text{width: 10em;} \
+# </style>'
 
 text = '''
 <div style="background-color: white;
@@ -401,6 +401,8 @@ class SimpleGui(Box):
 
     def run_button_clicked(self, trait_name):
         kwargs = self.model.get_values()
+        if not os.path.exists(kwargs['output_folder']):
+            os.makedirs(kwargs['output_folder'])
         html_table = getmolmap.calc(**kwargs)
         self.download_link = '''
         <div class="formbutton">

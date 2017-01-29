@@ -59,7 +59,7 @@ class Logger():
             self.tags_to_html = ('file_name', 'coverage', 'centrum', 'angle')
         else:
             self.df = False
-        out = kw.get('out', '../result/getmolmap_results') + '.xlsx'
+        out = kw.get('out', '../results/getmolmap_results') + '.xlsx'
         sheet_name = kw.get('sheet_name', 'getMolMap')
         self.workbook = xlsxwriter.Workbook(out)
         self.worksheet = self.workbook.add_worksheet(sheet_name)
